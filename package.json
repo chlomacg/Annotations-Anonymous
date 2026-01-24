@@ -1,19 +1,28 @@
 {
-  "name": "annotate-big-book",
+  "name": "annotations-anonymous",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
+    "codegen": "kysely-codegen",
     "lint": "eslint"
   },
   "dependencies": {
-    "next": "15.5.3",
+    "@portabletext/editor": "^4.2.4",
+    "@portabletext/keyboard-shortcuts": "^2.1.2",
+    "@portabletext/toolbar": "^5.0.14",
+    "@types/pg": "^8.16.0",
+    "lucide-react": "^0.544.0",
+    "next": "^15.5.9",
     "next-themes": "^0.4.6",
-    "react": "19.1.0",
+    "pg": "^8.17.1",
+    "postcss": "^8.5.6",
+    "react": "19.2.3",
     "react-aria-components": "^1.12.2",
-    "react-dom": "19.1.0"
+    "react-dom": "19.2.3",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -23,6 +32,8 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.3",
+    "kysely": "^0.28.9",
+    "kysely-codegen": "^0.19.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
