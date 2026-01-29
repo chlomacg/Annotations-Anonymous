@@ -1,7 +1,7 @@
 import { ThemeProvider } from "next-themes";
 import type { Metadata } from "next";
 import { Libre_Baskerville, Poppins } from "next/font/google";
-import "./globals.css"
+import "./globals.css";
 
 const libreBaskerville = Libre_Baskerville({
   variable: "--font-libre-baskerville",

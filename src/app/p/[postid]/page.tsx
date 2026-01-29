@@ -1,8 +1,7 @@
 interface PageProps {
-    params: { postid: string }
+  params: { postid: string };
 }
 
 export default async function Page({ params }: PageProps) {
-    const { postid } = await params;
-
+  const { postid } = await params;
 }
