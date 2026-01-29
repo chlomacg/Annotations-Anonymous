@@ -1,4 +1,4 @@
-import { Post as PostTable, JsonValue } from "kysely-codegen";
+import { Post as PostTable } from "kysely-codegen";
 import { PostInteractionButtons } from "./postInteractionButtons";
 import { Selectable } from "kysely";
 

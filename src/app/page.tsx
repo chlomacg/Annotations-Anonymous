@@ -1,6 +1,7 @@
 import { Editor } from "@/components/editor/postEditor";
 import Post from "@/components/post";
 import { db } from "@/database";
+import { PortableTextBlock } from "@portabletext/editor";
 import Image from "next/image";
 
 
@@ -15,12 +16,15 @@ export default async function Home() {
 
   const newPostCount = 12;
 
+  async function saveDraft(_: PortableTextBlock[]) { "use server"; }
+  async function sendPost (_: PortableTextBlock[]) { "use server"; }
+
   return (
     <div className="min-h-[100vh] flex flex-row justify-center bg-amber-50 text-black dark:bg-slate-900 dark:text-white">
       <div className="py-4 divide-y-2 dark:divide-gray-400 w-90 md:w-130 flex flex-col">
         <div className="flex flex-row gap-2">
           <Image src={userProfilePic} alt="Profile Picture of [CURRENT USER]" className="w-9 h-9 rounded-full" width={36} height={36}/>
-          <Editor userProfilePic />
+          <Editor sendPost={sendPost} saveDraft={saveDraft} />
         </div>
         {ShowNewPostsButton(newPostCount)}
         {
