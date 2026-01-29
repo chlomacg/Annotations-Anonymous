@@ -12,6 +12,7 @@ import {
   type ToolbarDecoratorSchemaType,
   type ToolbarStyleSchemaType,
 } from '@portabletext/toolbar'
+import { toPlainText } from '@portabletext/toolkit'
 import { QuoteIcon } from 'lucide-react'
 
 
@@ -22,7 +23,7 @@ export function Toolbar({ content, sendPost, saveDraft }: { content?: PortableTe
     extendDecorator, // see declarations below
     extendStyle, // see declarations below
   })
-  const hasContent = false; // placeholder
+  const hasContent = content && toPlainText(content).trim().length != 0;
 
 
   return (
