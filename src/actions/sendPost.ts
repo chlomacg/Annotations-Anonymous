@@ -5,7 +5,7 @@ import { json } from "@/database";
 import { User } from "@/types";
 import { PortableTextBlock } from "@portabletext/editor";
 import { Selectable } from "kysely";
-import { Post as PostTable } from "kysely-codegen";
+import { Post as PostTable } from "@/db/types";
 
 export async function sendPost(
   portableText: PortableTextBlock[],

@@ -6,7 +6,7 @@ import { User } from "@/types";
 import { p } from "@/util/blah";
 import { sendPostForUser, saveDraftForUser } from "@/util/dbWrapperFunctions";
 import { Selectable } from "kysely";
-import { Post as PostTable } from "kysely-codegen";
+import { Post as PostTable } from "@/db/types";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 

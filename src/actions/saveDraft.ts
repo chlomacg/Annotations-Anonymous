@@ -5,7 +5,7 @@ import { json } from "@/database";
 import { User } from "@/types";
 import { PortableTextBlock } from "@portabletext/editor";
 import { Selectable } from "kysely";
-import { Draft } from "kysely-codegen";
+import { Draft } from "@/db/types";
 
 export async function saveDraft(
   portableText: PortableTextBlock[],

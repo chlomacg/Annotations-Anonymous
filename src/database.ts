@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import { DB, Json } from "kysely-codegen";
+import { DB, Json } from "@/db/types";
 import { Kysely, PostgresDialect, RawBuilder, sql } from "kysely";
 
 const dialect = new PostgresDialect({

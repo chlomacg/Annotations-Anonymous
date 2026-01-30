@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "codegen": "kysely-codegen",
+    "codegen": "kysely-codegen --out-file src/db/types.ts",
     "lint": "eslint",
     "prettier": "prettier . --write"
   },

@@ -3,7 +3,7 @@ import { sendPost } from "@/actions/sendPost";
 import { User } from "@/types";
 import { PortableTextBlock } from "@portabletext/editor";
 import { Selectable } from "kysely";
-import { Draft, Post } from "kysely-codegen";
+import { Draft, Post } from "@/db/types";
 
 export function saveDraftForUser(
   user: User,
