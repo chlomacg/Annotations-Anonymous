@@ -2,7 +2,6 @@
 
 import { Editor } from "@/components/editor/postEditor";
 import Post from "@/components/post";
-import { db } from "@/database";
 import { User } from "@/types";
 import { p } from "@/util/blah";
 import { sendPostForUser, saveDraftForUser } from "@/util/dbWrapperFunctions";
@@ -14,7 +13,7 @@ import { useEffect, useState } from "react";
 export default function Home() {
   const [posts, setPosts] = useState<Selectable<PostTable>[]>([]);
   const fetchPosts = async () => {
-    setPosts(await p());
+    setPosts(await p()); // p() is bullshit im having to do to make sure the db calls run on the server
   };
   useEffect(() => {
     fetchPosts();
