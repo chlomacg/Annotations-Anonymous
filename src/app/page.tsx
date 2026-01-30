@@ -1,28 +1,39 @@
+"use client";
+
 import { Editor } from "@/components/editor/postEditor";
 import Post from "@/components/post";
 import { db } from "@/database";
-import { PortableTextBlock } from "@portabletext/editor";
+import { User } from "@/types";
+import { p } from "@/util/blah";
+import { sendPostForUser, saveDraftForUser } from "@/util/dbWrapperFunctions";
+import { Selectable } from "kysely";
+import { Post as PostTable } from "kysely-codegen";
 import Image from "next/image";
+import { useEffect, useState } from "react";
 
-export default async function Home() {
-  const posts = await db
-    .selectFrom("post")
-    .selectAll()
-    .orderBy("post.time_created", "desc")
-    .limit(30)
-    .execute();
+export default function Home() {
+  const [posts, setPosts] = useState<Selectable<PostTable>[]>([]);
+  const fetchPosts = async () => {
+    setPosts(await p());
+  };
+  useEffect(() => {
+    fetchPosts();
+  });
 
+  // Temporary constants
   const userProfilePic =
     "https://pbs.twimg.com/profile_images/1988665005928009728/X8Idm6KE_400x400.jpg";
-
+  const current_user: User = {
+    author_handle: "chlomacg",
+    author_id: "019c0b92-1ded-7a59-b07b-0f297299b21d",
+    author_display_name: "Chloe M.",
+  };
   const newPostCount = 12;
 
-  async function saveDraft(_: PortableTextBlock[]) {
-    "use server";
-  }
-  async function sendPost(_: PortableTextBlock[]) {
-    "use server";
-  }
+  const sendPost = sendPostForUser(current_user, (post) =>
+    setPosts((p) => [post, ...p])
+  );
+  const saveDraft = saveDraftForUser(current_user);
 
   return (
     <div className="min-h-screen flex flex-row justify-center bg-amber-50 text-black dark:bg-slate-900 dark:text-white">

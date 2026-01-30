@@ -1,6 +1,6 @@
 import { Pool } from "pg";
-import { DB } from "kysely-codegen";
-import { Kysely, PostgresDialect } from "kysely";
+import { DB, Json } from "kysely-codegen";
+import { Kysely, PostgresDialect, RawBuilder, sql } from "kysely";
 
 const dialect = new PostgresDialect({
   pool: new Pool({
@@ -12,15 +12,6 @@ export const db = new Kysely<DB>({
   dialect,
 });
 
-// export interface Database {
-//     annotation: PostTable,
-// }
-
-// export interface PostTable {
-//     id: Generated<number>,
-//     author:
-// }
-
-// export type Post = Selectable<PostTable>;
-// export type NewPost = Insertable<PostTable>;
-// export type PostUpdate = Updateable<PostTable>;
+export function json<T>(value: T): RawBuilder<Json> {
+  return sql`${JSON.stringify(value)}`;
+}
