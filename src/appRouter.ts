@@ -1,5 +1,5 @@
-import { initTRPC } from "@trpc/server";
-import { z } from "zod";
+import { initTRPC } from '@trpc/server';
+import { z } from 'zod';
 
 // todo: implement auth context
 export const createContext = async (/* opts: CreateNextContextOptions */) => {
@@ -15,15 +15,13 @@ export const appRouter = t.router({
   getInteractionsFromUserOnPost: t.procedure.input(z.uuidv7()).query((opts) => {
     return { postId: opts.input, liked: true, reposted: true };
   }),
-  createUser: t.procedure
-    .input(z.object({ name: z.string().min(5) }))
-    .mutation(async (opts) => {
-      return await doStuff();
-    }),
+  createUser: t.procedure.input(z.object({ name: z.string().min(5) })).mutation(async (opts) => {
+    return await doStuff();
+  }),
 });
 // export type definition of API
 export type AppRouter = typeof appRouter;
 
 async function doStuff() {
-  console.log("Hello");
+  console.log('Hello');
 }

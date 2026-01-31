@@ -1,7 +1,7 @@
-import { initTRPC } from "@trpc/server";
-import { createHTTPServer } from "@trpc/server/adapters/standalone";
-import { appRouter, createContext } from "./appRouter";
-import { Session } from "next-auth";
+import { initTRPC } from '@trpc/server';
+import { createHTTPServer } from '@trpc/server/adapters/standalone';
+import { appRouter, createContext } from './appRouter';
+import { Session } from 'next-auth';
 
 createHTTPServer({
   router: appRouter,
