@@ -1,0 +1,26 @@
+<svg id="Prime_Dusk" data-name="Prime Dusk" xmlns="http://www.w3.org/2000/svg" width="2500" height="2500" viewBox="0 0 2500 2500">
+  <defs>
+    <style>
+      .cls-1, .cls-3 {
+        fill: #fff;
+      }
+
+      .cls-2 {
+        fill: #395175;
+      }
+
+      .cls-3, .cls-4 {
+        fill-rule: evenodd;
+      }
+
+      .cls-4 {
+        fill: #fafbfd;
+      }
+    </style>
+  </defs>
+  <circle id="Outline" class="cls-1" cx="1249.999" cy="1249.999" r="1249.811"/>
+  <circle id="Circle" class="cls-2" cx="1250.001" cy="1250.001" r="1170.969"/>
+  <g id="triangle">
+    <path id="Triangle_1_copy" data-name="Triangle 1 copy" class="cls-3" d="M1247.82,35.611L2305.4,1855.49H190.245Zm0,154.188,923.35,1588.4H324.476Z"/>
+  </g>
+</svg>

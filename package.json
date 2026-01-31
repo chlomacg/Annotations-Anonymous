@@ -1,45 +1,33 @@
 {
   "name": "annotations-anonymous",
-  "version": "0.1.0",
   "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
-    "start": "next start",
-    "codegen": "kysely-codegen --out-file src/db/types.ts",
-    "lint": "eslint",
-    "prettier": "prettier . --write"
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@heroicons/react": "^2.2.0",
-    "@portabletext/editor": "^4.2.4",
-    "@portabletext/keyboard-shortcuts": "^2.1.2",
-    "@portabletext/react": "^6.0.2",
-    "@portabletext/toolbar": "^5.0.14",
-    "@portabletext/toolkit": "^5.0.1",
-    "@types/pg": "^8.16.0",
-    "lucide-react": "^0.544.0",
-    "next": "^16.1.6",
-    "next-themes": "^0.4.6",
-    "pg": "^8.17.1",
-    "postcss": "^8.5.6",
-    "react": "19.2.3",
-    "react-aria-components": "^1.12.2",
-    "react-dom": "19.2.3",
-    "uuid": "^13.0.0"
+    "@tailwindcss/vite": "^4.1.18",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "15.5.3",
-    "kysely": "^0.28.9",
-    "kysely-codegen": "^0.19.0",
-    "prettier": "3.8.1",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.4",
+    "vite": "^7.2.4"
   }
 }
