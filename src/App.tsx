@@ -19,8 +19,8 @@ function App() {
           <Editor />
         </div>
         {posts.map((postData) => (
-          <div className="flex flex-col gap-6 py-4">
-            <Post postData={postData} key={postData.id} />
+          <div className="flex flex-col gap-6 py-4" key={postData.id}>
+            <Post postData={postData} />
             <InteractionButtons />
           </div>
         ))}
