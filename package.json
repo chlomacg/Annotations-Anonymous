@@ -10,7 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "@portabletext/editor": "^4.3.7",
+    "@portabletext/toolbar": "^5.0.22",
     "@tailwindcss/vite": "^4.1.18",
+    "lucide-react": "^0.563.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwindcss": "^4.1.18"
