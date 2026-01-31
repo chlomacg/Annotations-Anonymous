@@ -1,12 +1,3 @@
-import { HeartIcon } from "@heroicons/react/24/outline";
-import { MessageSquare, RefreshCw } from "lucide-react";
-import { useState } from "react";
-import {
-  fetchPostInteractionsByUser,
-  fetchReplyCountOfPost,
-  setPostLikedByUser,
-} from "../util/apiCalls";
-
 export function Post({ postData }: { postData: PostData }) {
   return (
     <div className="grid grid-cols-[max-content_auto] gap-x-4 gap-y-2">
