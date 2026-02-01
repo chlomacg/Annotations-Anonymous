@@ -1,0 +1,39 @@
+{
+  "name": "annotations-anonymous-server",
+  "version": "1.0.0",
+  "description": "backend for annotations-anonymous",
+  "main": "./trpc-api-export/dist/index.js",
+  "exports": "./trpc-api-export/dist/index.js",
+  "types": "./trpc-api-export/dist/index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "tsx watch src/",
+    "migrate-latest": "npx tsx --env-file=.env scripts/migrateToLatest.ts",
+    "codegen": "kysely-codegen --out-file src/db/types.ts",
+    "trpc-api-export": "tsup --config trpc-api-export/builder/tsup.config.ts trpc-api-export/builder/index.ts && npm run format-fix",
+    "format-fix": "prettier --config .prettierrc --write --ignore-unknown -l ."
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@trpc/server": "^11.9.0",
+    "cors": "^2.8.6",
+    "next-auth": "^4.24.13",
+    "pg": "^8.18.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.16.0",
+    "kysely": "^0.28.11",
+    "kysely-codegen": "^0.19.0",
+    "prettier": "^3.8.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.9.2"
+  },
+  "tsup": {
+    "entry": [
+      "src/index.ts"
+    ]
+  }
+}
