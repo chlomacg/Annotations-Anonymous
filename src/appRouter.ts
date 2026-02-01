@@ -44,7 +44,7 @@ export const appRouter = t.router({
           likeState: z.boolean(),
         }),
       )
-      .mutation(() => {}),
+      .mutation((opts) => {}),
     setRepost: authedProcedure
       .input(
         z.object({
