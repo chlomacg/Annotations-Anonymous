@@ -1,42 +1,58 @@
 import { HeartIcon, RefreshCw, MessageSquare } from "lucide-react";
-import { useEffect, useState } from "react";
-import {
-  fetchPostInteractionsByUser,
-  fetchReplyCountOfPost,
-  setPostLikedByUser,
-  setPostRepostedByUser,
-} from "../util/apiCalls";
+import { trpc } from "../util/trpc";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 export function InteractionButtons() {
-  const { liked: initiallyLiked, reposted: initiallyReposted } =
-    fetchPostInteractionsByUser("placeholder", "placeholder");
-  const replyCount = fetchReplyCountOfPost("placeholder"); // later I'll make the reply count increase when a comment is written
+  const postId = "019c0fcc-c23a-7aaa-a2cf-af25fd3f301b";
 
-  const [liked, setLiked] = useState(initiallyLiked);
-  const [reposted, setReposted] = useState(initiallyReposted);
+  const userInteractionsQuery = useQuery({
+    ...trpc.post.interactions.byUser.queryOptions(postId),
+    initialData: { postId, liked: false, reposted: false },
+  });
+  const interactionStatsQuery = useQuery(
+    trpc.post.interactions.getStats.queryOptions(postId)
+  );
 
-  // client
-  const likePostWithLocalState = () => {
-    setLiked((l) => !l);
+  const { liked, reposted } = userInteractionsQuery.data;
+
+  const likeMutation = useMutation(
+    trpc.post.setLikeOnPost.mutationOptions({ postId, likeState: liked })
+  );
+  const likePost = () => {
+    likeMutation.mutate({ postId, likeState: !liked });
   };
-  // server
-  useEffect(() => {
-    setPostLikedByUser("placeholder", "placeholder", liked);
-  }, [liked]);
-
-  // client
-  const repostWithLocalState = () => {
-    setReposted((l) => !l);
+  const repostMutation = useMutation(
+    trpc.post.setRepost.mutationOptions({ postId, likeState: liked })
+  );
+  const repost = () => {
+    repostMutation.mutate({ postId, repostState: !reposted });
   };
-  // server
-  useEffect(() => {
-    setPostRepostedByUser("placeholder", "placeholder", reposted);
-  }, [reposted]);
+
+  if (
+    userInteractionsQuery.error ||
+    interactionStatsQuery.error ||
+    !interactionStatsQuery
+  )
+    return "Error...";
+
+  const replyCount = interactionStatsQuery.data?.replies;
 
   return (
     <div className="flex flex-row justify-evenly">
-      <LikeButton likePost={likePostWithLocalState} liked={liked} />
-      <RepostButton repost={repostWithLocalState} reposted={reposted} />
+      <LikeButton
+        likePost={likePost}
+        liked={
+          likeMutation.isPending ? likeMutation.variables.likeState : liked
+        }
+      />
+      <RepostButton
+        repost={repost}
+        reposted={
+          repostMutation.isPending
+            ? repostMutation.variables.repostState
+            : reposted
+        }
+      />
       <CommentButton replyCount={replyCount} />
     </div>
   );
@@ -83,7 +99,7 @@ function CommentButton({
   replyCount,
 }: {
   draftReply?: () => void;
-  replyCount: number;
+  replyCount?: number;
 }) {
   return (
     <div className="flex flex-row">

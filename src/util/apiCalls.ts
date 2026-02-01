@@ -1,5 +1,8 @@
 // Placeholders until I make a backend
 
+import { useQuery } from "@tanstack/react-query";
+import { trpc } from "./trpc";
+
 export function fetchRecentPosts() {
   return [
     {
