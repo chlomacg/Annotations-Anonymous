@@ -22,7 +22,7 @@ export function InteractionButtons() {
     likeMutation.mutate({ postId, likeState: !liked });
   };
   const repostMutation = useMutation(
-    trpc.post.setRepost.mutationOptions({ postId, likeState: liked })
+    trpc.post.setRepost.mutationOptions({ postId, repostState: reposted })
   );
   const repost = () => {
     repostMutation.mutate({ postId, repostState: !reposted });
