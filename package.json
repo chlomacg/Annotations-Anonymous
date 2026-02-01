@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "trpc-api-import": "npx tsx scripts/trpc-api-import.ts"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
