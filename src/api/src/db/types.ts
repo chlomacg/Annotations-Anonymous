@@ -5,13 +5,9 @@
 
 import type { ColumnType } from "kysely";
 
-export type ArrayType<T> = ArrayTypeImpl<T> extends (infer U)[]
-  ? U[]
-  : ArrayTypeImpl<T>;
-
-export type ArrayTypeImpl<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S[], I[], U[]>
-  : T[];
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
 
 export type Json = JsonValue;
 
@@ -31,24 +27,34 @@ export interface Draft {
   author_handle: string;
   author_id: string;
   content: Json;
-  times_edited: ArrayType<Timestamp>;
+  time_most_recently_edited: Timestamp;
+}
+
+export interface Like {
+  liker_id: string;
+  post_id: string;
+  timestamp: Timestamp | null;
 }
 
 export interface Post {
-  author_display_name: string | null;
-  author_handle: string | null;
-  author_id: string | null;
-  content: Json | null;
-  id: string;
-  index_in_thread: number | null;
-  liked_by: string[] | null;
-  posts_in_thread: string[] | null;
+  author_display_name: string;
+  author_handle: string;
+  author_id: string;
+  content: Json;
+  id: Generated<string>;
   replies: string[] | null;
-  reposted_by: string[] | null;
-  time_created: Timestamp | null;
+  time_created: Timestamp;
+}
+
+export interface Repost {
+  post_id: string;
+  reposter_id: string;
+  timestamp: Timestamp | null;
 }
 
 export interface DB {
   draft: Draft;
+  like: Like;
   post: Post;
+  repost: Repost;
 }

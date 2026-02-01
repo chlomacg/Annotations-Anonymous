@@ -5,7 +5,6 @@ import { Kysely, Migrator, PostgresDialect, FileMigrationProvider } from 'kysely
 import { DB } from '../src/db/types';
 
 async function migrateToLatest() {
-  console.log(process.env.DATABASE_URL);
   const db = new Kysely<DB>({
     dialect: new PostgresDialect({
       pool: new Pool({

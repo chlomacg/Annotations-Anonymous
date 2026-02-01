@@ -1,13 +1,5 @@
 import { Kysely, sql } from 'kysely';
 
-/*
-     author_id uuid NOT NULL,
-    author_handle character varying(24) NOT NULL,
-    content jsonb NOT NULL,
-    times_edited timestamp with time zone[] NOT NULL
-
-*/
-
 export async function up(db: Kysely<any>): Promise<void> {
   await db.schema
     .createTable('draft')
@@ -20,18 +12,34 @@ export async function up(db: Kysely<any>): Promise<void> {
   await db.schema
     .createTable('post')
     .addColumn('id', 'uuid', (col) => col.defaultTo(sql`uuidv7()`).primaryKey())
-    .addColumn('author_id', 'uuid', (col) => col.references('draft.author_id').notNull())
+    .addColumn('author_id', 'uuid', (col) => col.notNull())
     .addColumn('author_handle', 'varchar(24)', (col) => col.notNull())
     .addColumn('author_display_name', 'varchar(40)', (col) => col.notNull())
     .addColumn('time_created', 'timestamptz', (col) => col.notNull())
     .addColumn('content', 'jsonb', (col) => col.notNull())
     .addColumn('replies', sql`uuid[]`)
-    .addColumn('reposted_by', sql`uuid[]`)
-    .addColumn('liked_by', sql`uuid[]`)
+    .execute();
+
+  await db.schema
+    .createTable('like')
+    .addColumn('post_id', 'uuid', (col) => col.references('post.id'))
+    .addColumn('liker_id', 'uuid', (col) => col.notNull()) // TODOO: reference user table and make index
+    .addColumn('timestamp', 'timestamptz')
+    .addPrimaryKeyConstraint('like_pkey', ['liker_id', 'post_id'])
+    .execute();
+
+  await db.schema
+    .createTable('repost') // TODOO: add quote repost support
+    .addColumn('post_id', 'uuid', (col) => col.references('post.id'))
+    .addColumn('reposter_id', 'uuid', (col) => col.notNull()) // TODOO: reference user table and make index
+    .addColumn('timestamp', 'timestamptz')
+    .addPrimaryKeyConstraint('repost_pkey', ['reposter_id', 'post_id'])
     .execute();
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
   await db.schema.dropTable('post').execute();
   await db.schema.dropTable('draft').execute();
+  await db.schema.dropTable('like').execute();
+  await db.schema.dropTable('repost').execute();
 }

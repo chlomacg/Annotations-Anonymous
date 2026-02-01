@@ -8,7 +8,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/",
-    "migrate-latest": "npx tsx --env-file=.env scripts/migrateToLatest.ts",
+    "migrate": "npx tsx --env-file=.env scripts/migrateToLatest.ts && kysely-codegen --out-file src/db/types.ts",
+    "populate-debug-data": "npx tsx --env-file=.env scripts/populateDebugData.ts",
     "codegen": "kysely-codegen --out-file src/db/types.ts",
     "trpc-api-export": "tsup --config trpc-api-export/builder/tsup.config.ts trpc-api-export/builder/index.ts && npm run format-fix",
     "format-fix": "prettier --config .prettierrc --write --ignore-unknown -l ."
