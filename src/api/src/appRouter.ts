@@ -1,5 +1,9 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
+import { db, type Post } from './db';
+import superjson from 'superjson';
+import type { PortableTextBlock } from '@portabletext/editor';
+import type { Selectable } from 'kysely';
 
 type User = {
   id: string; // uuidv7
@@ -7,7 +11,10 @@ type User = {
 export type Context = {
   user: User | null;
 };
-export const t = initTRPC.context<Context>().create();
+
+export const t = initTRPC.context<Context>().create({
+  transformer: superjson,
+});
 
 // procedure that can be done without authentication
 export const publicProcedure = t.procedure;
@@ -27,14 +34,60 @@ export const authedProcedure = t.procedure.use(async function isAuthed(opts) {
   });
 });
 
+// To normalize the below type in intellisense
+type Simplify<T> = T extends object ? { [K in keyof T]: T[K] } : T;
+
+// For asserting that the json is portable text
+export type postsFetchResult = Array<Simplify<Omit<Selectable<Post>, 'content'> & { content: PortableTextBlock[] }>>;
+
 export const appRouter = t.router({
   post: {
+    fetchMostRecent: publicProcedure.input(z.number()).query(async (opts) => {
+      return (await db
+        .selectFrom('post')
+        .selectAll()
+        .orderBy('created_at', 'desc')
+        .limit(opts.input)
+        .execute()) as postsFetchResult;
+    }),
     interactions: {
-      getStats: publicProcedure.input(z.uuidv7()).query((opts) => {
-        return { postId: opts.input, likes: 20, reposts: 1, replies: 3 };
+      getStats: publicProcedure.input(z.uuidv7()).query(async (opts) => {
+        const postId = opts.input;
+        const { likes } = await db
+          .selectFrom('like')
+          .where('post_id', '=', postId)
+          .select(({ fn }) => fn.countAll<number>().as('likes'))
+          .executeTakeFirstOrThrow();
+        const { reposts } = await db
+          .selectFrom('repost')
+          .where('post_id', '=', postId)
+          .select(({ fn }) => fn.countAll<number>().as('reposts'))
+          .executeTakeFirstOrThrow();
+        const replies = (
+          await db.selectFrom('post').where('post.id', '=', postId).select('post.replies').executeTakeFirstOrThrow()
+        ).replies?.length;
+        return { postId: opts.input, likes, reposts, replies };
       }),
-      byUser: authedProcedure.input(z.uuidv7()).query((opts) => {
-        return { postId: opts.input, liked: true, reposted: true };
+      byUser: authedProcedure.input(z.uuidv7()).query(async (opts) => {
+        const { id: userId } = opts.ctx.user;
+        const postId = opts.input;
+
+        const liked =
+          (await db
+            .selectFrom('like')
+            .select('liker_id')
+            .where('liker_id', '=', userId)
+            .where('post_id', '=', postId)
+            .executeTakeFirst()) != undefined;
+        const reposted =
+          (await db
+            .selectFrom('repost')
+            .select('reposter_id')
+            .where('reposter_id', '=', userId)
+            .where('post_id', '=', postId)
+            .executeTakeFirst()) != undefined;
+
+        return { postId: opts.input, liked, reposted };
       }),
     },
     setLikeOnPost: authedProcedure
@@ -44,7 +97,23 @@ export const appRouter = t.router({
           likeState: z.boolean(),
         }),
       )
-      .mutation((opts) => {}),
+      .mutation(async (opts) => {
+        const { postId: post_id, likeState: liked } = opts.input;
+        const liker_id = opts.ctx.user.id;
+
+        // TODOO: error if unliking and there exists no like, or liking twice ?
+        if (liked) {
+          await db
+            .insertInto('like')
+            .values({
+              liker_id,
+              post_id,
+            })
+            .execute();
+        } else {
+          await db.deleteFrom('like').where('liker_id', '=', liker_id).where('post_id', '=', post_id).execute();
+        }
+      }),
     setRepost: authedProcedure
       .input(
         z.object({
@@ -52,7 +121,23 @@ export const appRouter = t.router({
           repostState: z.boolean(),
         }),
       )
-      .mutation(() => {}),
+      .mutation(async (opts) => {
+        const { postId: post_id, repostState: reposted } = opts.input;
+        const reposter_id = opts.ctx.user.id;
+
+        // TODOO: error if unliking and there exists no like, or liking twice ?
+        if (reposted) {
+          await db
+            .insertInto('repost')
+            .values({
+              reposter_id,
+              post_id,
+            })
+            .execute();
+        } else {
+          await db.deleteFrom('repost').where('reposter_id', '=', reposter_id).where('post_id', '=', post_id).execute();
+        }
+      }),
     // postReply:
   },
 });

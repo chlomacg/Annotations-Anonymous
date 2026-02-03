@@ -1,36 +1,21 @@
-import { useState } from "react";
-import { fetchRecentPosts } from "./util/apiCalls";
-import { Post } from "./components/Post";
 import { Editor } from "./components/Editor";
-import { InteractionButtons } from "./components/PostInteractionButtons";
-
-import { QueryClientProvider } from "@tanstack/react-query";
-import { queryClient } from "./util/trpc";
+import { Feed } from "./components/Feed";
 
 function App() {
-  const [posts] = useState(fetchRecentPosts());
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen flex flex-row justify-center bg-amber-50 text-black dark:bg-slate-900 dark:text-white">
-        <div className="py-4 divide-y-2 dark:divide-gray-400 w-90 md:w-130 flex flex-col">
-          <div className="flex flex-row gap-2">
-            <img
-              src="/chloe.jpg"
-              alt="A profile picture"
-              className="w-9 h-9 rounded-full"
-            />
-            <Editor />
-          </div>
-          {posts.map((postData) => (
-            <div className="flex flex-col gap-6 py-4" key={postData.id}>
-              <Post postData={postData} />
-              <InteractionButtons />
-            </div>
-          ))}
+    <div className="min-h-screen flex flex-row justify-center bg-amber-50 text-black dark:bg-slate-900 dark:text-white">
+      <div className="py-4 divide-y-2 dark:divide-gray-400 w-90 md:w-130 flex flex-col">
+        <div className="flex flex-row gap-2">
+          <img
+            src="/chloe.jpg"
+            alt="A profile picture"
+            className="w-9 h-9 rounded-full"
+          />
+          <Editor />
         </div>
+        <Feed />
       </div>
-    </QueryClientProvider>
+    </div>
   );
 }
 

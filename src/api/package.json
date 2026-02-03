@@ -7,11 +7,15 @@
   "types": "./trpc-api-export/dist/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsx watch src/",
-    "migrate": "npx tsx --env-file=.env scripts/migrateToLatest.ts && kysely-codegen --out-file src/db/types.ts",
+    "dev": "tsx watch --env-file=.env src/",
+    "setup": "test -f .env || cp example.env .env; npm run build-debug-db",
+    "build-debug-db": "npm run start-db && sleep 2 && npm run init-db && npm run populate-debug-data",
+    "rebuild-debug-db": "npm run destroy-db && npm run build-debug-db",
+    "start-db": "docker compose up -d",
+    "init-db": "npx tsx --env-file=.env scripts/migrateToLatest.ts && npm run codegen",
+    "destroy-db": "docker compose down && docker compose down -v",
     "populate-debug-data": "npx tsx --env-file=.env scripts/populateDebugData.ts",
     "codegen": "kysely-codegen --out-file src/db/types.ts",
-    "trpc-api-export": "tsup --config trpc-api-export/builder/tsup.config.ts trpc-api-export/builder/index.ts && npm run format-fix",
     "format-fix": "prettier --config .prettierrc --write --ignore-unknown -l ."
   },
   "author": "",
@@ -21,6 +25,7 @@
     "cors": "^2.8.6",
     "next-auth": "^4.24.13",
     "pg": "^8.18.0",
+    "superjson": "^2.2.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {

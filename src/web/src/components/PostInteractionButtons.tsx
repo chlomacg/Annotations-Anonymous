@@ -1,29 +1,36 @@
 import { HeartIcon, RefreshCw, MessageSquare } from "lucide-react";
-import { trpc } from "../util/trpc";
+import { queryClient, trpc } from "../util/backend";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-export function InteractionButtons() {
-  const postId = "019c0fcc-c23a-7aaa-a2cf-af25fd3f301b";
+export function InteractionButtons({ postId }: { postId: string }) {
+  const userInteractionsQuery = useQuery(
+    trpc.post.interactions.byUser.queryOptions(postId, {
+      initialData: { postId, liked: false, reposted: false },
+    })
+  );
 
-  const userInteractionsQuery = useQuery({
-    ...trpc.post.interactions.byUser.queryOptions(postId),
-    initialData: { postId, liked: false, reposted: false },
-  });
   const interactionStatsQuery = useQuery(
     trpc.post.interactions.getStats.queryOptions(postId)
   );
-
   const { liked, reposted } = userInteractionsQuery.data;
 
-  const likeMutation = useMutation(
-    trpc.post.setLikeOnPost.mutationOptions({ postId, likeState: liked })
-  );
+  const likeMutation = useMutation({
+    ...trpc.post.setLikeOnPost.mutationOptions(),
+    onSuccess: async () => {
+      const queryKey = trpc.post.interactions.byUser.queryKey();
+      await queryClient.invalidateQueries({ queryKey });
+    },
+  });
   const likePost = () => {
     likeMutation.mutate({ postId, likeState: !liked });
   };
-  const repostMutation = useMutation(
-    trpc.post.setRepost.mutationOptions({ postId, repostState: reposted })
-  );
+  const repostMutation = useMutation({
+    ...trpc.post.setRepost.mutationOptions(),
+    onSuccess: async () => {
+      const queryKey = trpc.post.interactions.byUser.queryKey();
+      await queryClient.invalidateQueries({ queryKey });
+    },
+  });
   const repost = () => {
     repostMutation.mutate({ postId, repostState: !reposted });
   };
@@ -106,9 +113,13 @@ function CommentButton({
       <button className="cursor-pointer" onClick={draftReply}>
         <MessageSquare size="22px" />
       </button>
-      <button className="cursor-pointer">
-        <span className="pl-2 dark:text-gray-400">{replyCount}</span>
-      </button>
+      {replyCount && replyCount >= 1 ? (
+        <button className="cursor-pointer">
+          <span className="pl-2 dark:text-gray-400">{replyCount}</span>
+        </button>
+      ) : (
+        <></>
+      )}
     </div>
   );
 }

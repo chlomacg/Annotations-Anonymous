@@ -1,3 +1,6 @@
+import type { PortableTextBlock } from "@portabletext/editor";
+import { PortableText, type PortableTextComponents } from "@portabletext/react";
+
 export function Post({ postData }: { postData: PostData }) {
   return (
     <div className="grid grid-cols-[max-content_auto] gap-x-4 gap-y-2">
@@ -16,16 +19,31 @@ export function Post({ postData }: { postData: PostData }) {
         <div className="text-sm text-gray-500">10hr ago</div>
       </div>
       <div></div>
-      <p>{postData.content}</p>
+      <div>
+        <PortableText value={postData.content} components={components} />
+      </div>
     </div>
   );
 }
+
+const components: PortableTextComponents = {
+  marks: {},
+  block: {
+    blockquote: ({ children }) => {
+      return (
+        <blockquote className="border-l-3 border-l-gray-400 p-2 my-2">
+          {children}
+        </blockquote>
+      );
+    },
+  },
+};
 
 export type PostData = {
   id: string;
   author_id: string;
   author_handle: string;
   author_display_name: string;
-  time_created: Date;
-  content: string;
+  created_at: Date;
+  content: PortableTextBlock[];
 };

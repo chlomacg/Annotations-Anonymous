@@ -1,16 +1,9 @@
-Follow these steps to reproduce an empty database on localhost
+Requires docker.
 
-1. write a `.env` file with `DATABASE_URL="postgresql://your_username:your_password@localhost:5432/AAdb"` `POSTGRES_USER="your_username"` and `POSTGRES_PASSWORD="your_password"` on separate lines
-2. `docker compose up -d`
-3. `docker compose exec pg18 psql -U your_username AAdb`
-4. #3 was to confirm we can log in. Ctrl+d to exit
-5. `npm run migrate-latest`
+To set up a local dev environment:
+`npm run setup`
 
-To populate the database with some debug data:
-`npm run populate-debug-data`
+Then you can `npm run dev` here or at the project root (change the postgres credentials in .env first if you like)
 
-To change the database schema:
-
-1. modify `migrations/migration.ts`
-2. `npm run migrate`
-3. `npm run populate-debug-data` if it so pleases you
+Should you modify the schema via `migrations/init.ts` and/or modify the debug data via `scripts/populateDebugData.ts`, restart the database with:
+`npm run rebuild-debug-db`

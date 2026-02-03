@@ -31,9 +31,9 @@ export interface Draft {
 }
 
 export interface Like {
+  created_at: Timestamp | null;
   liker_id: string;
   post_id: string;
-  timestamp: Timestamp | null;
 }
 
 export interface Post {
@@ -41,15 +41,15 @@ export interface Post {
   author_handle: string;
   author_id: string;
   content: Json;
+  created_at: Timestamp;
   id: Generated<string>;
-  replies: string[] | null;
-  time_created: Timestamp;
+  replies: Generated<string[] | null>;
 }
 
 export interface Repost {
+  created_at: Timestamp | null;
   post_id: string;
   reposter_id: string;
-  timestamp: Timestamp | null;
 }
 
 export interface DB {

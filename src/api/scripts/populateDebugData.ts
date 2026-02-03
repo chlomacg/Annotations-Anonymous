@@ -23,35 +23,82 @@ async function populateDataForDebugging(db: Kysely<DB>) {
   };
 
   const postOne = {
-    id: '000c0fcc-c23a-7aaa-a2cf-af25fd3f301b',
+    id: '019c1ffd-4984-7fc6-8d75-553801220ffc',
     author_id: chloe.id,
     author_handle: chloe.handle,
     author_display_name: chloe.display,
-    time_created: new Date(),
-    content: json({
-      content: 'Bello',
-    }),
+    created_at: new Date(),
+    content: json([
+      {
+        _type: 'block',
+        _key: 'c0a7e700e0ca',
+        style: 'normal',
+        markDefs: [],
+        children: [
+          {
+            _type: 'span',
+            _key: '5c5006ef0c7b',
+            text: 'H ello',
+            marks: [],
+          },
+        ],
+      },
+    ]),
     replies: [],
   };
   const postTwo = {
-    id: '200c0fcc-c23a-7aaa-a2cf-af25fd3f301b',
+    id: '019c1ffc-c072-71a6-b180-c2bb16f60c60',
     author_id: billW.id,
     author_handle: billW.handle,
     author_display_name: billW.display,
-    time_created: new Date(1935, 0),
-    content: json({
-      content:
-        'My friend suggested what then seemed a novel idea. He said, "Why don\'t you choose your own conception of God?"',
-    }),
+    created_at: new Date(1935, 0),
+    content: json([
+      {
+        _type: 'block',
+        _key: '102974e449be',
+        children: [
+          {
+            _type: 'span',
+            _key: 'fbb373bb8132',
+            text: 'My friend suggested what then seemed a novel idea. He said,',
+            marks: [],
+          },
+        ],
+        markDefs: [],
+        style: 'normal',
+      },
+      {
+        _type: 'block',
+        _key: '9d37d42b14e9',
+        children: [
+          {
+            _type: 'span',
+            _key: 'fbb373bb8132',
+            text: "Why don't you choose your own conception of God?",
+            marks: [],
+          },
+        ],
+        markDefs: [],
+        style: 'blockquote',
+      },
+    ]),
     replies: [],
   };
 
-  const result = await db.insertInto('post').values(postOne).executeTakeFirstOrThrow();
-  console.log(result);
+  console.log('Writing debug data...');
+
+  await db.insertInto('post').values(postOne).execute();
   await db.insertInto('post').values(postTwo).execute();
 
-  await db.insertInto('like').values({ post_id: postOne.id, liker_id: chloe.id, timestamp: new Date() }).execute();
-  await db.insertInto('repost').values({ post_id: postOne.id, reposter_id: chloe.id, timestamp: new Date() }).execute();
+  await db.insertInto('like').values({ post_id: postOne.id, liker_id: chloe.id, created_at: new Date() }).execute();
+  await db
+    .insertInto('repost')
+    .values({ post_id: postTwo.id, reposter_id: chloe.id, created_at: new Date() })
+    .execute();
+
+  await db.destroy();
+
+  console.log('Debug data written.');
 }
 
 populateDataForDebugging(db);
