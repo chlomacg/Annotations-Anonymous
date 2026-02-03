@@ -1,9 +1,10 @@
 {
   "name": "annotations-anonymous",
   "workspaces": [
-    "src/*"
+    "api",
+    "web"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace=src/api & npm run dev --workspace=src/web"
+    "dev": "npm run dev --workspace=api & npm run dev --workspace=web"
   }
 }
