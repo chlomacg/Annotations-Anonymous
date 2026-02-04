@@ -1,6 +1,6 @@
-import { H1Icon } from "@heroicons/react/24/outline";
-import { type PortableTextBlock } from "@portabletext/editor";
-import { bold, italic, underline } from "@portabletext/keyboard-shortcuts";
+import { H1Icon } from '@heroicons/react/24/outline';
+import { type PortableTextBlock } from '@portabletext/editor';
+import { bold, italic, underline } from '@portabletext/keyboard-shortcuts';
 import {
   useDecoratorButton,
   useStyleSelector,
@@ -9,9 +9,9 @@ import {
   type ExtendStyleSchemaType,
   type ToolbarDecoratorSchemaType,
   type ToolbarStyleSchemaType,
-} from "@portabletext/toolbar";
-import { toPlainText } from "@portabletext/toolkit";
-import { BoldIcon, ItalicIcon, UnderlineIcon, QuoteIcon } from "lucide-react";
+} from '@portabletext/toolbar';
+import { toPlainText } from '@portabletext/toolkit';
+import { BoldIcon, ItalicIcon, UnderlineIcon, QuoteIcon } from 'lucide-react';
 
 export function Toolbar({
   content,
@@ -54,7 +54,7 @@ export function Toolbar({
 // Extend the schema with icons, titles, and keyboard shortcuts
 
 const extendStyle: ExtendStyleSchemaType = (style) => {
-  if (style.name === "h1") {
+  if (style.name === 'h1') {
     return {
       ...style,
       icon: () => (
@@ -62,10 +62,10 @@ const extendStyle: ExtendStyleSchemaType = (style) => {
           <H1Icon className="size-3.75 [&>path]:stroke-[2px] dark:text-gray-300 dark:group-aria-checked:text-slate-900 dark:group-aria-checked:bg-gray-300" />
         </div>
       ),
-      title: "Title",
+      title: 'Title',
     };
   }
-  if (style.name === "blockquote") {
+  if (style.name === 'blockquote') {
     return {
       ...style,
       icon: () => (
@@ -73,7 +73,7 @@ const extendStyle: ExtendStyleSchemaType = (style) => {
           <QuoteIcon size="15px" strokeWidth="2px" />
         </div>
       ),
-      title: "Quote",
+      title: 'Quote',
     };
   }
 
@@ -81,7 +81,7 @@ const extendStyle: ExtendStyleSchemaType = (style) => {
 };
 
 const extendDecorator: ExtendDecoratorSchemaType = (decorator) => {
-  if (decorator.name === "strong") {
+  if (decorator.name === 'strong') {
     return {
       ...decorator,
       // TODOO: maybe add color indication of half-bolded selected text (unsure if possible)
@@ -91,10 +91,10 @@ const extendDecorator: ExtendDecoratorSchemaType = (decorator) => {
         </div>
       ),
       shortcut: bold,
-      title: "",
+      title: '',
     };
   }
-  if (decorator.name === "underline") {
+  if (decorator.name === 'underline') {
     return {
       ...decorator,
       // TODOO: maybe add color indication of half-bolded selected text (unsure if possible)
@@ -105,10 +105,10 @@ const extendDecorator: ExtendDecoratorSchemaType = (decorator) => {
       ),
       // Optional: connect to a keyboard shortcut from the keyboard-shortcuts library
       shortcut: underline,
-      title: "",
+      title: '',
     };
   }
-  if (decorator.name === "italic") {
+  if (decorator.name === 'italic') {
     return {
       ...decorator,
       // TODOO: maybe add color indication of half-bolded selected text (unsure if possible)
@@ -118,7 +118,7 @@ const extendDecorator: ExtendDecoratorSchemaType = (decorator) => {
         </div>
       ),
       shortcut: italic,
-      title: "",
+      title: '',
     };
   } else {
     console.log(decorator.name);
@@ -133,9 +133,9 @@ const DecoratorButton = (props: { schemaType: ToolbarDecoratorSchemaType }) => {
   return (
     <button
       type="button"
-      onClick={() => decoratorButton.send({ type: "toggle" })}
+      onClick={() => decoratorButton.send({ type: 'toggle' })}
       role="checkbox"
-      aria-checked={decoratorButton.snapshot.matches({ enabled: "active" })}
+      aria-checked={decoratorButton.snapshot.matches({ enabled: 'active' })}
       className="group h-fit"
     >
       {props.schemaType.icon && <props.schemaType.icon />}
@@ -147,13 +147,9 @@ const StyleButton = (props: { schemaType: ToolbarStyleSchemaType }) => {
   return props.schemaType.icon ? (
     <button
       type="button"
-      onClick={() =>
-        styleSelector.send({ type: "toggle", style: props.schemaType.name })
-      }
+      onClick={() => styleSelector.send({ type: 'toggle', style: props.schemaType.name })}
       role="checkbox"
-      aria-checked={
-        styleSelector.snapshot.context.activeStyle === props.schemaType.name
-      }
+      aria-checked={styleSelector.snapshot.context.activeStyle === props.schemaType.name}
       className="group h-fit"
     >
       {<props.schemaType.icon />}
