@@ -40,7 +40,6 @@ export function Editor() {
           renderDecorator={renderDecorator}
           renderListItem={(props) => <>{props.children}</>}
         />
-        <pre>{JSON.stringify(content, null, 2)}</pre>
         <Toolbar content={content} saveDraft={() => {}} sendPost={() => {}} />
       </EditorProvider>
     </div>
