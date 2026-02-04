@@ -20,6 +20,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@portabletext/editor": "^4.3.7",
     "@trpc/server": "^11.9.0",
     "cors": "^2.8.6",
     "drizzle-orm": "^0.45.1",
@@ -30,9 +31,9 @@
   },
   "devDependencies": {
     "@types/pg": "^8.16.0",
+    "drizzle-kit": "^0.31.8",
     "kysely": "^0.28.11",
     "prettier": "^3.8.1",
-    "tsup": "^8.5.1",
     "tsx": "^4.19.3",
     "typescript": "^5.9.2"
   },
