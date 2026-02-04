@@ -1,6 +1,9 @@
-import { Kysely, PostgresDialect } from 'kysely';
+import { Kysely, PostgresDialect, RawBuilder, sql } from 'kysely';
 import { Pool } from 'pg';
-import { DB, json } from '../src/db';
+import { DB } from '../src/db';
+function json<T>(object: T): RawBuilder<T> {
+  return sql`cast (${JSON.stringify(object)} as jsonb)`;
+}
 
 const db = new Kysely<DB>({
   dialect: new PostgresDialect({
@@ -27,7 +30,6 @@ async function populateDataForDebugging(db: Kysely<DB>) {
     author_id: chloe.id,
     author_handle: chloe.handle,
     author_display_name: chloe.display,
-    created_at: new Date(),
     content: json([
       {
         _type: 'block',
@@ -44,7 +46,6 @@ async function populateDataForDebugging(db: Kysely<DB>) {
         ],
       },
     ]),
-    replies: [],
   };
   const postTwo = {
     id: '019c1ffc-c072-71a6-b180-c2bb16f60c60',
@@ -82,7 +83,6 @@ async function populateDataForDebugging(db: Kysely<DB>) {
         style: 'blockquote',
       },
     ]),
-    replies: [],
   };
 
   console.log('Writing debug data...');

@@ -9,13 +9,12 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch --env-file=.env src/",
     "setup": "test -f .env || cp example.env .env; npm run build-debug-db",
-    "build-debug-db": "npm run start-db && sleep 2 && npm run init-db && npm run populate-debug-data",
-    "rebuild-debug-db": "npm run destroy-db && npm run build-debug-db",
     "start-db": "docker compose up -d",
-    "init-db": "npx tsx --env-file=.env scripts/migrateToLatest.ts && npm run codegen",
+    "init-db": "npx drizzle-kit push",
     "destroy-db": "docker compose down && docker compose down -v",
     "populate-debug-data": "npx tsx --env-file=.env scripts/populateDebugData.ts",
-    "codegen": "kysely-codegen --out-file src/db/types.ts",
+    "build-debug-db": "npm run start-db && sleep 1 && npm run init-db && npm run populate-debug-data",
+    "rebuild-debug-db": "npm run destroy-db && npm run build-debug-db",
     "format-fix": "prettier --config .prettierrc --write --ignore-unknown -l ."
   },
   "author": "",
@@ -23,6 +22,7 @@
   "dependencies": {
     "@trpc/server": "^11.9.0",
     "cors": "^2.8.6",
+    "drizzle-orm": "^0.45.1",
     "next-auth": "^4.24.13",
     "pg": "^8.18.0",
     "superjson": "^2.2.2",
@@ -31,7 +31,6 @@
   "devDependencies": {
     "@types/pg": "^8.16.0",
     "kysely": "^0.28.11",
-    "kysely-codegen": "^0.19.0",
     "prettier": "^3.8.1",
     "tsup": "^8.5.1",
     "tsx": "^4.19.3",

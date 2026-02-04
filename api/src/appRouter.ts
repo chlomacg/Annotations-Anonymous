@@ -1,9 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
-import { db, type Post } from './db';
+import { db } from './db';
 import superjson from 'superjson';
-import type { PortableTextBlock } from '@portabletext/editor';
-import type { Selectable } from 'kysely';
 
 type User = {
   id: string; // uuidv7
@@ -34,21 +32,10 @@ export const authedProcedure = t.procedure.use(async function isAuthed(opts) {
   });
 });
 
-// To normalize the below type in intellisense
-type Simplify<T> = T extends object ? { [K in keyof T]: T[K] } : T;
-
-// For asserting that the json is portable text
-export type postsFetchResult = Array<Simplify<Omit<Selectable<Post>, 'content'> & { content: PortableTextBlock[] }>>;
-
 export const appRouter = t.router({
   post: {
     fetchMostRecent: publicProcedure.input(z.number()).query(async (opts) => {
-      return (await db
-        .selectFrom('post')
-        .selectAll()
-        .orderBy('created_at', 'desc')
-        .limit(opts.input)
-        .execute()) as postsFetchResult;
+      return await db.selectFrom('post').selectAll().orderBy('created_at', 'desc').limit(opts.input).execute();
     }),
     interactions: {
       getStats: publicProcedure.input(z.uuidv7()).query(async (opts) => {
@@ -56,12 +43,12 @@ export const appRouter = t.router({
         const { likes } = await db
           .selectFrom('like')
           .where('post_id', '=', postId)
-          .select(({ fn }) => fn.countAll<number>().as('likes'))
+          .select(db.fn.countAll<number>().as('likes'))
           .executeTakeFirstOrThrow();
         const { reposts } = await db
           .selectFrom('repost')
           .where('post_id', '=', postId)
-          .select(({ fn }) => fn.countAll<number>().as('reposts'))
+          .select(db.fn.countAll<number>().as('reposts'))
           .executeTakeFirstOrThrow();
         const replies = (
           await db.selectFrom('post').where('post.id', '=', postId).select('post.replies').executeTakeFirstOrThrow()
