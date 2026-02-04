@@ -1,9 +1,4 @@
-import {
-  BoldIcon,
-  H1Icon,
-  ItalicIcon,
-  UnderlineIcon,
-} from "@heroicons/react/24/outline";
+import { H1Icon } from "@heroicons/react/24/outline";
 import { type PortableTextBlock } from "@portabletext/editor";
 import { bold, italic, underline } from "@portabletext/keyboard-shortcuts";
 import {
@@ -16,7 +11,7 @@ import {
   type ToolbarStyleSchemaType,
 } from "@portabletext/toolbar";
 import { toPlainText } from "@portabletext/toolkit";
-import { QuoteIcon } from "lucide-react";
+import { BoldIcon, ItalicIcon, UnderlineIcon, QuoteIcon } from "lucide-react";
 
 export function Toolbar({
   content,
@@ -49,7 +44,7 @@ export function Toolbar({
         onClick={() => sendPost(content!)}
         aria-disabled={!hasContent}
         disabled={!hasContent}
-        className="cursor-pointer align-vertical px-4 py-1.5 rounded-full dark:text-gray-800 dark:bg-gray-200 font-bold dark:aria-disabled:bg-gray-500"
+        className="cursor-pointer aria-disabled:cursor-default align-vertical px-4 py-1.5 rounded-full dark:text-gray-800 border-gray-300 border aria-disabled:border-amber-100 bg-amber-200/85 aria-disabled:bg-amber-100 aria-disabled:text-gray-500 dark:bg-gray-100 font-bold dark:aria-disabled:bg-gray-500"
       >
         Post
       </button>
@@ -63,7 +58,7 @@ const extendStyle: ExtendStyleSchemaType = (style) => {
     return {
       ...style,
       icon: () => (
-        <div className="flex p-1 rounded-md border-2 dark:group-aria-checked:bg-gray-300 border-gray-300">
+        <div className="flex p-1 rounded-md border-2 group-aria-checked:bg-amber-200/60 dark:group-aria-checked:bg-gray-300 border-gray-300">
           <H1Icon className="size-3.75 [&>path]:stroke-[2px] dark:text-gray-300 dark:group-aria-checked:text-slate-900 dark:group-aria-checked:bg-gray-300" />
         </div>
       ),
@@ -74,7 +69,7 @@ const extendStyle: ExtendStyleSchemaType = (style) => {
     return {
       ...style,
       icon: () => (
-        <div className="p-1 rounded-md border-2 dark:group-aria-checked:bg-gray-300 border-gray-300">
+        <div className="p-1 rounded-md border-2 group-aria-checked:bg-amber-200/60 dark:group-aria-checked:bg-gray-300 border-gray-300">
           <QuoteIcon size="15px" strokeWidth="2px" />
         </div>
       ),
@@ -91,8 +86,8 @@ const extendDecorator: ExtendDecoratorSchemaType = (decorator) => {
       ...decorator,
       // TODOO: maybe add color indication of half-bolded selected text (unsure if possible)
       icon: () => (
-        <div className="p-0.75 rounded-md border-2 dark:group-aria-checked:bg-gray-300 border-gray-300">
-          <BoldIcon className="size-4 [&>path]:stroke-[2px] dark:text-gray-300 dark:group-aria-checked:text-slate-900 dark:group-aria-checked:bg-gray-300" />
+        <div className="p-0.75 rounded-md border-2 group-aria-checked:bg-amber-200/60 dark:group-aria-checked:bg-gray-300 border-gray-300">
+          <BoldIcon className="size-4 dark:text-gray-300 dark:group-aria-checked:text-slate-900 dark:group-aria-checked:bg-gray-300" />
         </div>
       ),
       shortcut: bold,
@@ -104,8 +99,8 @@ const extendDecorator: ExtendDecoratorSchemaType = (decorator) => {
       ...decorator,
       // TODOO: maybe add color indication of half-bolded selected text (unsure if possible)
       icon: () => (
-        <div className="p-0.75 rounded-md border-2 dark:group-aria-checked:bg-gray-300 border-gray-300">
-          <UnderlineIcon className="size-4 [&>path]:stroke-[2px] dark:text-gray-300 dark:group-aria-checked:text-slate-900 dark:group-aria-checked:bg-gray-300" />
+        <div className="p-0.75 rounded-md border-2 group-aria-checked:bg-amber-200/60 dark:group-aria-checked:bg-gray-300 border-gray-300">
+          <UnderlineIcon className="size-4.25 [&>path]:stroke-[2px] dark:text-gray-300 dark:group-aria-checked:text-slate-900 dark:group-aria-checked:bg-gray-300" />
         </div>
       ),
       // Optional: connect to a keyboard shortcut from the keyboard-shortcuts library
@@ -118,7 +113,7 @@ const extendDecorator: ExtendDecoratorSchemaType = (decorator) => {
       ...decorator,
       // TODOO: maybe add color indication of half-bolded selected text (unsure if possible)
       icon: () => (
-        <div className="p-0.75 rounded-md border-2 dark:group-aria-checked:bg-gray-300 border-gray-300">
+        <div className="p-0.75 rounded-md border-2  group-aria-checked:bg-amber-200/60  dark:group-aria-checked:bg-gray-300 border-gray-300">
           <ItalicIcon className="size-4 [&>path]:stroke-[2px] dark:text-gray-300 dark:group-aria-checked:text-slate-900 dark:group-aria-checked:bg-gray-300" />
         </div>
       ),
