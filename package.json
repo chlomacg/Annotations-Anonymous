@@ -4,6 +4,7 @@
     "api",
     "web"
   ],
+  "type": "module",
   "scripts": {
     "dev": "npm run dev --workspace=api & npm run dev --workspace=web"
   },

@@ -36,7 +36,7 @@ export function Editor() {
           renderDecorator={renderDecorator}
           renderListItem={(props) => <>{props.children}</>}
         />
-        <Toolbar content={content} saveDraft={() => {}} sendPost={() => {}} />
+        <Toolbar content={content} sendPost={() => {}} />
       </EditorProvider>
     </div>
   );

@@ -16,10 +16,8 @@ import { BoldIcon, ItalicIcon, UnderlineIcon, QuoteIcon } from 'lucide-react';
 export function Toolbar({
   content,
   sendPost,
-  saveDraft,
 }: {
   content?: PortableTextBlock[];
-  saveDraft: (_: PortableTextBlock[]) => void;
   sendPost: (_: PortableTextBlock[]) => void;
 }) {
   // useToolbarSchema provides access to the PTE schema
