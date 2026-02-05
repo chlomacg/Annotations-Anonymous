@@ -1,16 +1,16 @@
 import { initTRPC, TRPCError } from '@trpc/server';
-import { z } from 'zod';
+import z from 'zod';
 import { db } from './db';
 import superjson from 'superjson';
 
-type User = {
-  id: string; // uuidv7
-};
-export type Context = {
-  user: User | null;
-};
-
-export const t = initTRPC.context<Context>().create({
+// created for each request
+export const createContext = () => ({
+  user: {
+    id: '019c1b31-7ad1-7a6d-aafa-7d31aebd4547',
+  },
+});
+type Context = Awaited<ReturnType<typeof createContext>>;
+const t = initTRPC.context<Context>().create({
   transformer: superjson,
 });
 
@@ -39,17 +39,22 @@ export const appRouter = t.router({
     }),
     interactions: {
       getStats: publicProcedure.input(z.uuidv7()).query(async (opts) => {
+        console.log('user:', opts.ctx.user);
+
         const postId = opts.input;
+        console.log('postid:', postId);
         const { likes } = await db
           .selectFrom('like')
           .where('post_id', '=', postId)
           .select(db.fn.countAll<number>().as('likes'))
           .executeTakeFirstOrThrow();
+        console.log('likes:', likes);
         const { reposts } = await db
           .selectFrom('repost')
           .where('post_id', '=', postId)
           .select(db.fn.countAll<number>().as('reposts'))
           .executeTakeFirstOrThrow();
+        console.log('reposts:', reposts);
         const replies = (
           await db.selectFrom('post').where('post.id', '=', postId).select('post.replies').executeTakeFirstOrThrow()
         ).replies?.length;
@@ -128,5 +133,4 @@ export const appRouter = t.router({
     // postReply:
   },
 });
-// export type definition of API
 export type AppRouter = typeof appRouter;

@@ -1,12 +1,17 @@
-import { createHTTPServer } from '@trpc/server/adapters/standalone';
-import { appRouter } from './appRouter';
+import * as trpcExpress from '@trpc/server/adapters/express';
+import express from 'express';
 import cors from 'cors';
+import { appRouter, createContext } from './appRouter';
 
-createHTTPServer({
-  middleware: cors(),
-  router: appRouter,
-  createContext() {
-    return { user: { id: '019c1b31-7ad1-7a6d-aafa-7d31aebd4547' } };
-  },
-  // basePath: '/trpc/', // optional, defaults to '/'
-}).listen(2000);
+const app = express();
+
+app.use(
+  '/trpc',
+  cors(),
+  trpcExpress.createExpressMiddleware({
+    router: appRouter,
+    createContext,
+  }),
+);
+
+app.listen(4000);
