@@ -1,4 +1,7 @@
 {
+  "type": "ESNext",
+  "include": ["src/"],
+
   "compilerOptions": {
     "esModuleInterop": true,
 
