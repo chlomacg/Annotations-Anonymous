@@ -42,7 +42,7 @@ export function Toolbar({
         onClick={() => sendPost(content!)}
         aria-disabled={!hasContent}
         disabled={!hasContent}
-        className="cursor-pointer aria-disabled:cursor-default align-vertical px-4 py-1.5 rounded-full dark:text-gray-800 border-gray-300 border aria-disabled:border-amber-100 bg-amber-200/85 aria-disabled:bg-amber-100 aria-disabled:text-gray-700 dark:bg-gray-100 font-bold dark:aria-disabled:bg-slate-200/60 dark:aria-disabled:border-slate-200/60"
+        className="cursor-pointer aria-disabled:cursor-default align-vertical px-4 py-1.5 rounded-full dark:text-gray-800 border-gray-300 border aria-disabled:border-orange-200 bg-orange-400/55 aria-disabled:bg-orange-200 aria-disabled:text-gray-500 dark:bg-gray-100 font-bold dark:aria-disabled:bg-slate-200/60 dark:aria-disabled:border-slate-200/60"
       >
         Post
       </button>
