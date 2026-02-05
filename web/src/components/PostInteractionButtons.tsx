@@ -50,20 +50,17 @@ export function InteractionButtons({ postId }: { postId: string }) {
 }
 
 function LikeButton({ likePost, liked }: { likePost?: () => void; liked: boolean }) {
-  const fill = liked ? '#ff0d5d' : undefined;
-  const color = fill;
   return (
-    <button className="cursor-pointer" onClick={likePost}>
-      <HeartIcon className="size-6 stroke-[1.75]" stroke={color || 'currentColor'} fill={fill} color={color} />
+    <button aria-checked={liked} className="cursor-pointer group aria-checked:text-[#ff0d5d]" onClick={likePost}>
+      <HeartIcon className="size-6 stroke-[1.75] group-aria-checked:fill-[#ff0d5d]" />
     </button>
   );
 }
 
 function RepostButton({ repost, reposted }: { repost?: () => void; reposted: boolean }) {
-  const color = reposted ? '#66d973' : undefined;
   return (
-    <button className="cursor-pointer" onClick={repost}>
-      <RefreshCw color={color} size="22px" />
+    <button aria-checked={reposted} className="cursor-pointer aria-checked:text-[#66d973]" onClick={repost}>
+      <RefreshCw size="22px" />
     </button>
   );
 }
