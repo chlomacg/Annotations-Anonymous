@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Editor } from './components/Editor';
+import { EditorContext } from './components/EditorContext';
 import { Feed } from './components/Feed';
 import { authClient } from './lib/backend';
 import { Button } from './components/ui/button';
 import { LoginDialog } from './components/LoginDialog';
 import { toast } from 'sonner';
+import { Editor } from './components/Editor';
 
 function App() {
   const {
@@ -33,12 +34,14 @@ function App() {
       <div className="py-4 divide-y-2 dark:divide-gray-400 w-90 md:w-130 flex flex-col">
         <div className="flex flex-row gap-2">
           {session && <img src="/chloe.jpg" alt="A profile picture" className="w-9 h-9 rounded-full" />}
-          <Editor
-            session={session}
-            promptLogin={() => {
-              setLoginPrompt(true);
-            }}
-          />
+          <EditorContext>
+            <Editor
+              session={session}
+              promptLogin={() => {
+                setLoginPrompt(true);
+              }}
+            />
+          </EditorContext>
         </div>
         <Feed />
       </div>

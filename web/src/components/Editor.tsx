@@ -1,50 +1,63 @@
+import { trpc, queryClient, type Session } from '@/lib/backend';
 import {
-  defineSchema,
-  EditorProvider,
+  useEditor,
   PortableTextEditable,
   type BlockRenderProps,
   type PortableTextBlock,
   type RenderDecoratorFunction,
 } from '@portabletext/editor';
-import { EventListenerPlugin } from '@portabletext/editor/plugins';
+import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Toolbar } from './EditorToolbar';
-import type { Session } from '../lib/backend';
 
 export function Editor({ session, promptLogin }: { session: Session | null; promptLogin: () => void }) {
-  const [content, setContent] = useState<Array<PortableTextBlock> | undefined>(undefined);
+  const editor = useEditor();
+
+  const [content, setContent] = useState<PortableTextBlock[] | undefined>(undefined);
+
+  editor.on('mutation', (event) => {
+    setContent(event.value);
+  });
+
+  const sendPostMutation = useMutation({
+    ...trpc.post.send.mutationOptions(),
+    onSuccess: async (postId?: string) => {
+      // Refresh feed
+      const queryKey = trpc.post.fetchMostRecent.queryKey();
+      await queryClient.invalidateQueries({ queryKey });
+
+      // Clear editor
+      editor.send({ type: 'update value', value: [] });
+      toast('Post sent!');
+    },
+    onError: async () => {
+      toast('Post not sent, something went wrong :(', {
+        position: 'top-center',
+        style: { color: 'oklch(63.7% 0.237 25.331)' },
+      });
+    },
+  });
 
   const sendPost =
     session == null
       ? promptLogin
-      : () => {
-          console.log('sending post'); // TODOO
+      : async (post: PortableTextBlock[]) => {
+          const result = await sendPostMutation.mutateAsync(post);
+          if (result == undefined) toast('Failed to send post', { position: 'top-center' });
         };
+
   return (
-    <div className="w-full flex flex-col divide-y-2 dark:divide-gray-400 pb-2">
-      <EditorProvider
-        initialConfig={{
-          schemaDefinition,
-          initialValue: content,
-        }}
-      >
-        <EventListenerPlugin
-          on={(event) => {
-            if (event.type === 'mutation') {
-              setContent(event.value);
-            }
-          }}
-        />
-        <PortableTextEditable
-          className="text-lg focus:outline-none active:outline-none py-2"
-          renderPlaceholder={() => <span className="text-gray-500">Blaze your glory...</span>}
-          renderBlock={renderBlock}
-          renderDecorator={renderDecorator}
-          renderListItem={(props) => <>{props.children}</>}
-        />
-        <Toolbar content={content} sendPost={sendPost} />
-      </EditorProvider>
-    </div>
+    <>
+      <PortableTextEditable
+        className="text-lg focus:outline-none active:outline-none py-2"
+        renderPlaceholder={() => <span className="text-gray-500">Blaze your glory...</span>}
+        renderBlock={renderBlock}
+        renderDecorator={renderDecorator}
+        renderListItem={(props) => <>{props.children}</>}
+      />
+      <Toolbar content={content} sendPost={sendPost} />
+    </>
   );
 }
 
@@ -67,23 +80,3 @@ const renderDecorator: RenderDecoratorFunction = (props) => {
       return <>{props.children}</>;
   }
 };
-
-const schemaDefinition = defineSchema({
-  // Decorators are simple marks that don't hold any data
-  decorators: [{ name: 'strong' }, { name: 'italic' }, { name: 'underline' }],
-  // Styles apply to entire text blocks
-  // There's always a 'normal' style that can be considered the paragraph style
-  styles: [{ name: 'normal' }, { name: 'h1' }, { name: 'blockquote' }],
-
-  // The types below are left empty for this example.
-  // See the rendering guide to learn more about each type.
-
-  // Annotations are more complex marks that can hold data (for example, hyperlinks).
-  annotations: [],
-  // Lists apply to entire text blocks as well (for example, bullet, numbered).
-  lists: [],
-  // Inline objects hold arbitrary data that can be inserted into the text (for example, custom emoji).
-  inlineObjects: [],
-  // Block objects hold arbitrary data that live side-by-side with text blocks (for example, images, code blocks, and tables).
-  blockObjects: [],
-});

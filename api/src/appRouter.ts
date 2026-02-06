@@ -2,11 +2,14 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import z from 'zod';
 import { db } from './db';
 import superjson from 'superjson';
+import { json } from './util';
 
 // created for each request
 export const createContext = () => ({
   user: {
     id: '019c1b31-7ad1-7a6d-aafa-7d31aebd4547',
+    handle: 'mushchlo',
+    displayName: 'Chloe M',
   },
 });
 type Context = Awaited<ReturnType<typeof createContext>>;
@@ -31,6 +34,9 @@ export const authedProcedure = t.procedure.use(async function isAuthed(opts) {
     },
   });
 });
+
+// TODOO: Make a proper validator
+const portableTextValidator = z.array(z.any());
 
 export const appRouter = t.router({
   post: {
@@ -79,6 +85,23 @@ export const appRouter = t.router({
         return { postId: opts.input, liked, reposted };
       }),
     },
+    send: authedProcedure.input(portableTextValidator).mutation(async (opts) => {
+      const content = json(opts.input);
+      const { id: author_id, handle: author_handle, displayName: author_display_name } = opts.ctx.user;
+
+      const storedPost = await db
+        .insertInto('post')
+        .values({
+          content,
+          author_id,
+          author_display_name,
+          author_handle,
+        })
+        .returning('id')
+        .executeTakeFirst();
+
+      return storedPost?.id;
+    }),
     setLikeOnPost: authedProcedure
       .input(
         z.object({
