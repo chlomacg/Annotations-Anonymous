@@ -1,5 +1,5 @@
 import { HeartIcon, RefreshCw, MessageSquare } from 'lucide-react';
-import { queryClient, trpc } from '../util/backend';
+import { queryClient, trpc } from '../lib/backend';
 import { useMutation, useQuery } from '@tanstack/react-query';
 
 export function InteractionButtons({ postId }: { postId: string }) {

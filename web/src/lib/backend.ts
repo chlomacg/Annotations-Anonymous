@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import { createTRPCContext, createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
+import { createAuthClient } from 'better-auth/react';
 import type { AppRouter } from '../../../api/src/appRouter';
 import superjson from 'superjson';
 
@@ -16,3 +17,10 @@ export const trpc = createTRPCOptionsProxy<AppRouter>({
   client: trpcClient,
   queryClient,
 });
+
+export const authClient = createAuthClient({
+  baseURL: 'http://localhost:4000',
+  basePath: '/api/auth',
+});
+
+export type Session = typeof authClient.$Infer.Session;

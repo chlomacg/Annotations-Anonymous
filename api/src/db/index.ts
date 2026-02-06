@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import { Kysely, PostgresDialect } from 'kysely';
 import { type Kyselify } from 'drizzle-orm/kysely';
-import { tables } from './schema';
+import * as tables from './schema';
 import { drizzle } from 'drizzle-orm/postgres-js';
 
 const dialect = new PostgresDialect({
@@ -10,7 +10,7 @@ const dialect = new PostgresDialect({
   }),
 });
 
-export const drizzledb = drizzle(process.env.DATABASE_URL);
+export const drizzledb = drizzle(process.env.DATABASE_URL as string);
 
 type Tables = typeof tables;
 export type DB = {

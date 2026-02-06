@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { trpc } from '../util/backend';
+import { trpc } from '../lib/backend';
 import { Post } from './Post';
 import { InteractionButtons } from './PostInteractionButtons';
 

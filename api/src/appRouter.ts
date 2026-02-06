@@ -39,25 +39,22 @@ export const appRouter = t.router({
     }),
     interactions: {
       getStats: publicProcedure.input(z.uuidv7()).query(async (opts) => {
-        console.log('user:', opts.ctx.user);
-
         const postId = opts.input;
-        console.log('postid:', postId);
+
         const { likes } = await db
           .selectFrom('like')
           .where('post_id', '=', postId)
           .select(db.fn.countAll<number>().as('likes'))
           .executeTakeFirstOrThrow();
-        console.log('likes:', likes);
         const { reposts } = await db
           .selectFrom('repost')
           .where('post_id', '=', postId)
           .select(db.fn.countAll<number>().as('reposts'))
           .executeTakeFirstOrThrow();
-        console.log('reposts:', reposts);
         const replies = (
           await db.selectFrom('post').where('post.id', '=', postId).select('post.replies').executeTakeFirstOrThrow()
         ).replies?.length;
+
         return { postId: opts.input, likes, reposts, replies };
       }),
       byUser: authedProcedure.input(z.uuidv7()).query(async (opts) => {

@@ -9,10 +9,17 @@ import {
 import { EventListenerPlugin } from '@portabletext/editor/plugins';
 import { useState } from 'react';
 import { Toolbar } from './EditorToolbar';
+import type { Session } from '../lib/backend';
 
-export function Editor() {
+export function Editor({ session, promptLogin }: { session: Session | null; promptLogin: () => void }) {
   const [content, setContent] = useState<Array<PortableTextBlock> | undefined>(undefined);
 
+  const sendPost =
+    session == null
+      ? promptLogin
+      : () => {
+          console.log('sending post'); // TODOO
+        };
   return (
     <div className="w-full flex flex-col divide-y-2 dark:divide-gray-400 pb-2">
       <EditorProvider
@@ -25,7 +32,6 @@ export function Editor() {
           on={(event) => {
             if (event.type === 'mutation') {
               setContent(event.value);
-              console.log(event.value);
             }
           }}
         />
@@ -36,7 +42,7 @@ export function Editor() {
           renderDecorator={renderDecorator}
           renderListItem={(props) => <>{props.children}</>}
         />
-        <Toolbar content={content} sendPost={() => {}} />
+        <Toolbar content={content} sendPost={sendPost} />
       </EditorProvider>
     </div>
   );

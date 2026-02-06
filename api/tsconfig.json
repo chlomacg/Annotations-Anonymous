@@ -1,6 +1,6 @@
 {
   "type": "ESNext",
-  "include": ["src/"],
+  "include": ["src/", "src/db/relations.ts"],
 
   "compilerOptions": {
     "esModuleInterop": true,
