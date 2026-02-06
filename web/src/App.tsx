@@ -18,7 +18,7 @@ function App() {
   const [loginPrompted, setLoginPrompt] = useState(false);
 
   return (
-    <div className="min-h-screen flex flex-row justify-center bg-amber-50 text-black dark:bg-slate-900 dark:text-white relative z-0">
+    <div className="min-h-screen antialiased flex flex-row justify-center bg-amber-50 text-black dark:bg-slate-900 dark:text-white relative z-0">
       <LoginDialog loginPrompted={loginPrompted} setLoginPrompt={setLoginPrompt} />
       {session && (
         <Button
