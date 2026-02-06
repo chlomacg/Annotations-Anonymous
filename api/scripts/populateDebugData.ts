@@ -1,9 +1,7 @@
-import { Kysely, PostgresDialect, RawBuilder, sql } from 'kysely';
+import { Kysely, PostgresDialect } from 'kysely';
 import { Pool } from 'pg';
 import { DB } from '../src/db';
-function json<T>(object: T): RawBuilder<T> {
-  return sql`cast (${JSON.stringify(object)} as jsonb)`;
-}
+import { json } from '../src/util';
 
 const db = new Kysely<DB>({
   dialect: new PostgresDialect({
