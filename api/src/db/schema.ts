@@ -45,7 +45,10 @@ export const post = pgTable('post', {
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
   content: jsonb().notNull(),
-  replies: uuid().array().default(['RAY']).notNull(),
+  replies: uuid()
+    .array()
+    .default(sql`ARRAY[]::uuid[]`)
+    .notNull(),
 });
 
 export const session = pgTable(
