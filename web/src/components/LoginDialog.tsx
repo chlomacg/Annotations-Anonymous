@@ -4,10 +4,12 @@ import { authClient } from '@/lib/backend';
 
 export function LoginDialog({
   loginPrompted,
-  setLoginPrompt,
+  setLoginPrompted,
+  prompt,
 }: {
   loginPrompted: boolean;
-  setLoginPrompt: (_: boolean) => void;
+  setLoginPrompted: (_: boolean) => void;
+  prompt: { message: string; description: string };
 }) {
   const signIn = async () => {
     await authClient.signIn.social({
@@ -17,11 +19,11 @@ export function LoginDialog({
   };
 
   return (
-    <Dialog open={loginPrompted} onOpenChange={setLoginPrompt}>
+    <Dialog open={loginPrompted} onOpenChange={setLoginPrompted}>
       <DialogContent className="sm:max-w-106.25">
         <DialogHeader>
-          <DialogTitle>Please log in to post</DialogTitle>
-          <DialogDescription>Your post will be waiting for you after logging in.</DialogDescription>
+          <DialogTitle>{prompt.message}</DialogTitle>
+          <DialogDescription>{prompt.description}</DialogDescription>
         </DialogHeader>
         <Button onClick={signIn}>Sign in with Google</Button>
       </DialogContent>
