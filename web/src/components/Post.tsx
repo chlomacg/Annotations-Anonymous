@@ -1,5 +1,6 @@
 import type { PortableTextBlock } from '@portabletext/editor';
 import { PortableText, type PortableTextComponents } from '@portabletext/react';
+import { PostTimestamp } from './PostTimestamp';
 
 export function Post({ postData }: { postData: PostData }) {
   return (
@@ -12,7 +13,7 @@ export function Post({ postData }: { postData: PostData }) {
           <span className="text-sm font-bold">{postData.author_display_name}</span>
           <span className="text-xs text-gray-500">@{postData.author_handle}</span>
         </div>
-        <div className="text-sm text-gray-500">10hr ago</div>
+        <PostTimestamp time={postData.created_at} />
       </div>
       <div></div>
       <div>
