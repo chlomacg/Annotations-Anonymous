@@ -2,7 +2,8 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import z from 'zod';
 import { db } from './db';
 import superjson from 'superjson';
-import { json } from './util';
+import { ChangeFieldIn, json, Simplify } from './util';
+import { PortableTextBlock } from '@portabletext/editor';
 
 // created for each request
 export const createContext = () => ({
@@ -41,7 +42,10 @@ const portableTextValidator = z.array(z.any());
 export const appRouter = t.router({
   post: {
     fetchMostRecent: publicProcedure.input(z.number()).query(async (opts) => {
-      return await db.selectFrom('post').selectAll().orderBy('created_at', 'desc').limit(opts.input).execute();
+      const posts = await db.selectFrom('post').selectAll().orderBy('created_at', 'desc').limit(opts.input).execute();
+      type Post = ChangeFieldIn<(typeof posts)[0], 'content', PortableTextBlock[]>;
+
+      return posts as Array<Simplify<Post>>;
     }),
     interactions: {
       getStats: publicProcedure.input(z.uuidv7()).query(async (opts) => {
