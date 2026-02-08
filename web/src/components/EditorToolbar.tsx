@@ -18,7 +18,7 @@ export function Toolbar({
   sendPost,
 }: {
   content?: PortableTextBlock[];
-  sendPost: (_: PortableTextBlock[]) => void;
+  sendPost: (() => void) | ((_: PortableTextBlock[]) => Promise<void>);
 }) {
   // useToolbarSchema provides access to the PTE schema
   // optionally, pass in updated schemas to override the default
@@ -39,7 +39,7 @@ export function Toolbar({
         ))}
       </div>
       <button
-        onClick={() => sendPost(content!)}
+        onClick={async () => await sendPost(content!)}
         aria-disabled={!hasContent}
         disabled={!hasContent}
         className="cursor-pointer aria-disabled:cursor-default align-vertical px-4 py-1.5 rounded-full dark:text-gray-800 border-gray-300 border aria-disabled:border-orange-200 bg-orange-400/55 aria-disabled:bg-orange-200 aria-disabled:text-gray-500 dark:bg-gray-100 font-bold dark:aria-disabled:bg-slate-200/60 dark:aria-disabled:border-slate-200/60"

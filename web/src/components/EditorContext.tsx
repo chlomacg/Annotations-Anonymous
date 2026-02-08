@@ -1,9 +1,12 @@
-import { defineSchema, EditorProvider } from '@portabletext/editor';
+import { defineSchema, EditorProvider, type PortableTextBlock } from '@portabletext/editor';
+import { EventListenerPlugin } from '@portabletext/editor/plugins';
 import { type Session } from '../lib/backend';
 import { Editor } from './Editor';
-import type { ReactNode } from 'react';
+import { useState } from 'react';
 
-export function EditorContext({ children }: { children: ReactNode }) {
+export function EditorContext(props: { session: Session | null; promptLogin: () => void }) {
+  const [content, setContent] = useState<PortableTextBlock[] | undefined>(undefined);
+
   return (
     <div className="w-full flex flex-col divide-y-2 dark:divide-gray-400 pb-2">
       <EditorProvider
@@ -11,7 +14,14 @@ export function EditorContext({ children }: { children: ReactNode }) {
           schemaDefinition,
         }}
       >
-        {children}
+        <EventListenerPlugin
+          on={(event) => {
+            if (event.type === 'mutation') {
+              setContent(event.value);
+            }
+          }}
+        />
+        <Editor {...props} content={content} />
       </EditorProvider>
     </div>
   );

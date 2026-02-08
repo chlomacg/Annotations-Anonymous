@@ -7,18 +7,19 @@ import {
   type RenderDecoratorFunction,
 } from '@portabletext/editor';
 import { useMutation } from '@tanstack/react-query';
-import { useState } from 'react';
 import { toast } from 'sonner';
 import { Toolbar } from './EditorToolbar';
 
-export function Editor({ session, promptLogin }: { session: Session | null; promptLogin: () => void }) {
+export function Editor({
+  session,
+  promptLogin,
+  content,
+}: {
+  session: Session | null;
+  promptLogin: () => void;
+  content?: PortableTextBlock[];
+}) {
   const editor = useEditor();
-
-  const [content, setContent] = useState<PortableTextBlock[] | undefined>(undefined);
-
-  editor.on('mutation', (event) => {
-    setContent(event.value);
-  });
 
   const sendPostMutation = useMutation({
     ...trpc.post.send.mutationOptions(),
