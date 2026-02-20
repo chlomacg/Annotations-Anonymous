@@ -23,7 +23,7 @@ async function main() {
 async function makeAllPlainText(directory: string) {
   const plainText = await processDirectory(
     directory,
-    (path) => GetTextFromPDF(path).then(convertFileToPlainText),
+    (path) => getTextFromPDF(path).then(convertFileToPlainText),
     'Converted to plain text',
   );
 
@@ -93,7 +93,7 @@ type LineType =
   | LineKind.PageNumber
   | LineKind.Footnote;
 
-async function GetTextFromPDF(path: string): Promise<TextContent[]> {
+async function getTextFromPDF(path: string): Promise<TextContent[]> {
   const doc = await pdfjsLib.getDocument(path).promise;
   const docLength = doc.numPages;
   const pageIndices = [...Array(docLength).keys()].map((i) => i + 1);
