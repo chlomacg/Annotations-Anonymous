@@ -242,11 +242,13 @@ function markFootnotes(lines: BlockOf<MarkedLine>[]) {
   pages.forEach((linesInPage) => {
     const footnoteSymbols = [];
 
+    // Iterate backwards until we hit a line that doesn't start with a symbol
     for (let i = linesInPage.length - 1; i >= 0 && isSymbol(linesInPage[i].item.contents[0].str); i--) {
       const symbol = linesInPage[i].item.contents[0].str;
       const indexOverall = linesInPage[i].lineIndexOverall;
 
       footnoteSymbols.push(symbol);
+      // Mark the line as a footnote
       lines[indexOverall].item = {
         ...lines[indexOverall].item,
         kind: 'footnote',
@@ -258,15 +260,19 @@ function markFootnotes(lines: BlockOf<MarkedLine>[]) {
       };
     }
 
+    // Mark the references
     for (const symbol in footnoteSymbols) {
-      const foundSymbol = linesInPage
+      const foundSymbols = linesInPage
         .flatMap(({ item, lineIndexOverall }) =>
           item.contents.map((textItem, indexInLine) => ({ lineIndexOverall, indexInLine, ...textItem })),
         )
-        .find(({ str }) => str == symbol);
+        .filter(({ str }) => str == symbol);
 
-      if (foundSymbol != undefined)
-        lines[foundSymbol.lineIndexOverall].item.contents[foundSymbol.indexInLine].symbol = symbol;
+      // Mark every reference to each footnote (could be > 1)
+      for (let i = 0; i < foundSymbols.length; i++) {
+        const symbol = foundSymbols[i];
+        lines[symbol.lineIndexOverall].item.contents[symbol.indexInLine].symbol = symbol.str;
+      }
     }
   });
 }
@@ -280,7 +286,7 @@ function markParagraphs(lines: BlockOf<MarkedLine>[]) {
   pages.forEach((pageLines) => {
     const linesMinusSkipped = pageLines.filter(({ item }) => item.kind == 'normal');
 
-    // Coalesce lines by the nearest quarter of an x value
+    // Coalesce lines on a page by the nearest quarter of an x value
     const linesGroupedByPosition = Map.groupBy(
       linesMinusSkipped.map(({ position, lineIndexOverall }) => ({
         x: Math.round(position.x * 4) / 4,
@@ -308,7 +314,8 @@ function markParagraphs(lines: BlockOf<MarkedLine>[]) {
   });
 }
 
-// marks in place
+// Marks big letters, titles, chapters, and page numbers, but not paragraphs or footnotes.
+// Marks in place.
 function markLines(lines: BlockOf<MarkedLine>[]) {
   for (let i = 0; i < lines.length; i++) lines[i].item = markLine(lines[i].item);
 }
