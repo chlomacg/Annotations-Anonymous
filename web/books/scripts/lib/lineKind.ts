@@ -24,13 +24,8 @@ export type PageNumber = {
   kind: 'page number';
   page: number;
 };
-// The symbol in the body that alerts the reader to read the footnote
-export type FootnoteReference = {
-  kind: 'footnote link';
-  indicatorSymbol: string;
-};
 export type Footnote = {
   kind: 'footnote';
-  indicatorSymbol: string;
+  symbol: string;
   note: string;
 };

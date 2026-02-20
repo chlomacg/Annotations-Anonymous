@@ -12,16 +12,21 @@ type BlockOf<T> = {
   pageIndex: number;
 };
 
-type MarkedLine = {
-  contents: TextItem[];
-  continuationOfPreviousLine: boolean | 'keep hyphen';
-} & LineType;
-
 type Position = {
   x: number;
   y: number;
   width: number;
   height: number;
+};
+
+type MarkedLine = {
+  contents: (TextItem & FootnoteInfo)[];
+  continuationOfPreviousLine: boolean | 'keep hyphen';
+} & LineType;
+
+// Marks the symbol in the body that alerts the reader to read the footnote
+type FootnoteInfo = {
+  symbol?: string;
 };
 
 import type * as LineKind from './lib/lineKind.ts';
@@ -33,8 +38,7 @@ type LineType =
   | LineKind.Indented
   | LineKind.BigLetter
   | LineKind.PageNumber
-  | LineKind.Footnote
-  | LineKind.FootnoteReference;
+  | LineKind.Footnote;
 
 async function GetTextFromPDF(path: string): Promise<TextContent[]> {
   const doc = await pdfjsLib.getDocument(path).promise;
@@ -87,6 +91,7 @@ function parseFile(content: TextContent[]): string {
   markLines(lines);
   markParagraphs(lines);
   markWordBreaks(lines);
+  markFootnotes(lines);
 
   let isFirstPrintedLine = true;
   lines.forEach((line) => {
@@ -104,6 +109,8 @@ function parseFile(content: TextContent[]): string {
         .slice(1)
         .map((item) => item.str)
         .reduce((p, n) => `${p} ${n}`);
+    } else if (line.item.kind == 'footnote') {
+      str += `\n${line.item.symbol}: ${line.item.note}`;
     } else {
       str += line.item.contents.map((item) => item.str).reduce((p, n) => `${p} ${n}`);
     }
@@ -116,7 +123,7 @@ function parseFile(content: TextContent[]): string {
   //     continuation: item.continuationOfPreviousLine,
   //   })),
   // );
-  // console.log(str);
+  console.log(str);
 
   return str;
 }
@@ -219,6 +226,49 @@ function markWordBreaks(lines: BlockOf<MarkedLine>[]) {
 
     last = current;
   }
+}
+
+// Marks lines that contain or reference footnotes in place
+function markFootnotes(lines: BlockOf<MarkedLine>[]) {
+  function isSymbol(s: string) {
+    const symbolList = ['*'];
+    return symbolList.includes(s);
+  }
+
+  // We keep the original indices so we can modify the array in place
+  const linesMarkedWithIndices = lines.map((line, lineIndexOverall) => ({ lineIndexOverall, ...line }));
+
+  const pages = Map.groupBy(linesMarkedWithIndices, (line) => line.pageIndex);
+  pages.forEach((linesInPage) => {
+    const footnoteSymbols = [];
+
+    for (let i = linesInPage.length - 1; i >= 0 && isSymbol(linesInPage[i].item.contents[0].str); i--) {
+      const symbol = linesInPage[i].item.contents[0].str;
+      const indexOverall = linesInPage[i].lineIndexOverall;
+
+      footnoteSymbols.push(symbol);
+      lines[indexOverall].item = {
+        ...lines[indexOverall].item,
+        kind: 'footnote',
+        symbol,
+        note: linesInPage[i].item.contents
+          .slice(1)
+          .map((item) => item.str)
+          .join(' '),
+      };
+    }
+
+    for (const symbol in footnoteSymbols) {
+      const foundSymbol = linesInPage
+        .flatMap(({ item, lineIndexOverall }) =>
+          item.contents.map((textItem, indexInLine) => ({ lineIndexOverall, indexInLine, ...textItem })),
+        )
+        .find(({ str }) => str == symbol);
+
+      if (foundSymbol != undefined)
+        lines[foundSymbol.lineIndexOverall].item.contents[foundSymbol.indexInLine].symbol = symbol;
+    }
+  });
 }
 
 // Marks lines that begin paragraphs in place
