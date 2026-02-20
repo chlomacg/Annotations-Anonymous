@@ -24,7 +24,7 @@ type Position = {
   height: number;
 };
 
-import type * as LineKind from './lib/lineKind';
+import type * as LineKind from './lib/lineKind.ts';
 
 type LineType =
   | LineKind.Normal

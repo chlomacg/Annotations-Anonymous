@@ -4,7 +4,7 @@
     "useDefineForClassFields": true,
     "lib": ["es2024", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "types": ["node"],
+    "types": ["node", "./typings/is-word"],
     "skipLibCheck": true,
 
     /* Bundler mode */
@@ -13,7 +13,6 @@
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
-    "jsx": "react-jsx",
 
     /* Linting */
     "strict": true,
