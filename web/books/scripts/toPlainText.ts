@@ -6,6 +6,59 @@ import type { TextContent, TextItem } from 'pdfjs-dist/types/src/display/api';
 import isWord from 'is-word';
 const englishWords = isWord('american-english');
 
+async function main() {
+  const mode: string = process.argv[2];
+  const dir = 'AA-test';
+
+  switch (mode) {
+    case 'plain-text':
+      return makeAllPlainText(dir);
+    case 'html':
+      return makeAllHTML(dir);
+    default:
+      console.log(`invalid mode ${mode}`);
+  }
+}
+
+async function makeAllPlainText(directory: string) {
+  const plainText = await processDirectory(
+    directory,
+    (path) => GetTextFromPDF(path).then(convertFileToPlainText),
+    'Converted to plain text',
+  );
+
+  console.log(plainText.join('\n\n'));
+}
+
+async function makeAllHTML(directory: string) {
+  const html = await processDirectory(
+    directory,
+    async (path) => console.log(path), // todo
+    'Converted to html',
+  );
+}
+
+async function processDirectory<T>(
+  directory: string,
+  process: (path: string) => Promise<T>,
+  processName: string,
+): Promise<T[]> {
+  const currentDir = import.meta.dirname;
+  const parentDir = currentDir.slice(0, currentDir.lastIndexOf('/'));
+
+  const dir = `${parentDir}/${directory}`;
+  const files = await readdir(dir);
+
+  const time1 = new Date();
+  const out = await Promise.all(files.map((file) => process(`${dir}/${file}`)));
+  const time2 = new Date();
+
+  const elapsed2 = convert(time2.getTime() - time1.getTime(), 'ms').to('best');
+  console.log(`${processName} in ${elapsed2.toString()}`);
+
+  return out;
+}
+
 type BlockOf<T> = {
   item: T;
   position: Position;
@@ -65,7 +118,7 @@ function positionOf(item: TextItem): Position {
   return { x, y, width, height };
 }
 
-function parseFile(content: TextContent[]): string {
+function convertFileToPlainText(content: TextContent[]): string {
   let str = '';
   const textItems: BlockOf<TextItem>[] = content
     .map((c, pageIndex) =>
@@ -365,22 +418,4 @@ function markLine(line: MarkedLine): MarkedLine {
   return line;
 }
 
-async function makeAllPlainText(inDirectory: string) {
-  const currentDir = import.meta.dirname;
-  const parentDir = currentDir.slice(0, currentDir.lastIndexOf('/'));
-
-  const dir = `${parentDir}/${inDirectory}`;
-
-  const files = await readdir(dir);
-
-  const time1 = new Date();
-  const out = await Promise.all(files.map((file) => GetTextFromPDF(`${dir}/${file}`).then(parseFile)));
-  const time2 = new Date();
-
-  const elapsed2 = convert(time2.getTime() - time1.getTime(), 'ms').to('best');
-  console.log(`Made plaintext in ${elapsed2.toString()}`);
-
-  console.log(out);
-}
-
-makeAllPlainText('AA-test');
+main();
