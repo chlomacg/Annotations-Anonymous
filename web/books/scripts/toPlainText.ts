@@ -1,10 +1,40 @@
 import { readdir } from 'node:fs/promises';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import convert from 'convert';
-import { TextContent, TextItem } from 'pdfjs-dist/types/src/display/api';
+import type { TextContent, TextItem } from 'pdfjs-dist/types/src/display/api';
 
 import isWord from 'is-word';
 const englishWords = isWord('american-english');
+
+type BlockOf<T> = {
+  item: T;
+  position: Position;
+  pageIndex: number;
+};
+
+type MarkedLine = {
+  contents: TextItem[];
+  continuationOfPreviousLine: boolean | 'keep hyphen';
+} & LineType;
+
+type Position = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+import type * as LineKind from './lib/lineKind';
+
+type LineType =
+  | LineKind.Normal
+  | LineKind.Chapter
+  | LineKind.Title
+  | LineKind.Indented
+  | LineKind.BigLetter
+  | LineKind.PageNumber
+  | LineKind.Footnote
+  | LineKind.FootnoteReference;
 
 async function GetTextFromPDF(path: string): Promise<TextContent[]> {
   const doc = await pdfjsLib.getDocument(path).promise;
@@ -21,27 +51,29 @@ async function GetTextFromPDF(path: string): Promise<TextContent[]> {
   });
 }
 
-function positionOf(item: TextItem) {
-  // if we don't add the height the giant letter that starts the chapter goes later than it should
-  const y: number = item.transform[5] + item.height;
+function positionOf(item: TextItem): Position {
+  const { width, height } = item;
+
+  const y: number = item.transform[5] + height;
   const x: number = item.transform[4];
 
-  return { x, y };
+  return { x, y, width, height };
 }
 
 function parseFile(content: TextContent[]): string {
   let str = '';
-  const textItems = content
+  const textItems: BlockOf<TextItem>[] = content
     .map((c, pageIndex) =>
       c.items
         .filter((item) => 'str' in item)
         .map((item) => ({ item, position: positionOf(item), pageIndex }))
         .sort((a, b) => {
-          // A lower y value means lower on the page. Top to bottom first
+          // A lower y value means lower on the page. Top to bottom first.
+          // If we don't add the height the giant letter that starts the chapter goes later than it should
           if (a.position.y < b.position.y) return 1;
           // but a lower x value means closer to the start of the line (left in English). Left-to-right second
           if (a.position.y == b.position.y) return a.position.x - b.position.x;
-          // else a.position.y > b.position.y
+          // else y(a) > y(b)
           return -1;
         }),
     )
@@ -50,93 +82,125 @@ function parseFile(content: TextContent[]): string {
 
   // let currPage = 0;
 
-  const lineInfo = [];
-  let last: BlockOf<TextItem> | undefined = undefined;
-  for (let i = 0; i < textItems.length; i++) {
-    // const {
-    //   item,
-    //   position: { x, y },
-    //   pageIndex,
-    // } = textItems[i];
+  const lines = getGraphicalLines(textItems);
 
-    // if (pageIndex != currPage) {
-    //   console.log(`there are ${textItems.length} text items in page ${pageIndex}`);
-    //   currPage = pageIndex;
-    // }
-    // console.log(`[${x}, ${y}] = ${item.str}`);
-    const current = textItems[i];
+  markLines(lines);
+  markParagraphs(lines);
+  markWordBreaks(lines);
 
-    const result = joinTextItems(current, lineInfo, last);
-    if (result == undefined) continue;
+  let isFirstPrintedLine = true;
+  lines.forEach((line) => {
+    if (['title', 'chapter', 'page number'].includes(line.item.kind)) return;
 
-    str += result;
-    last = current;
-  }
+    if (isFirstPrintedLine) isFirstPrintedLine = false;
+    else if (line.item.kind == 'indented') str += '\n    ';
+    else if (line.item.continuationOfPreviousLine == false) str += ' ';
+    else if (line.item.continuationOfPreviousLine == 'keep hyphen') str += '-';
+
+    if (line.item.kind == 'big letter') {
+      // Join together the big letter and the next item even though they're separate blocks
+      str += line.item.contents[0].str;
+      str += line.item.contents
+        .slice(1)
+        .map((item) => item.str)
+        .reduce((p, n) => `${p} ${n}`);
+    } else {
+      str += line.item.contents.map((item) => item.str).reduce((p, n) => `${p} ${n}`);
+    }
+  });
+
+  // console.log(
+  //   lines.map(({ item }) => ({
+  //     str: item.contents.map(({ str }) => str).reduce((p, n) => `${p}|${n}`),
+  //     kind: item.kind,
+  //     continuation: item.continuationOfPreviousLine,
+  //   })),
+  // );
+  // console.log(str);
 
   return str;
 }
 
-type BlockOf<T> = {
-  item: T;
-  position: Position;
-};
+// Returns an array of the lines that are graphically represented. The lines do not
+// merge the words split across line breaks, and the lines do not contain empty TextItems.
+function getGraphicalLines(document: BlockOf<TextItem>[]): BlockOf<MarkedLine>[] {
+  const lines: BlockOf<MarkedLine>[] = [];
+  let currentLine: BlockOf<MarkedLine> | undefined = undefined;
 
-type Position = {
-  x: number;
-  y: number;
-};
+  for (let i = 0; i < document.length; i++) {
+    const current = document[i];
+    const next = document.at(i + 1);
 
-// type LineInfo = {
-//   position: Position;
-//   lineType: 'normal' | 'chapter' | 'title' | 'footnote' | 'paragraphStart' | 'firstLetterBig';
-// };
+    // Skip empty blocks always
+    if (current.item.str.trim().length == 0) continue;
 
-function joinTextItems(
-  current: BlockOf<TextItem>,
-  lineStartPositions: Position[],
-  last?: BlockOf<TextItem>,
-): string | undefined {
-  const isFirstItemOverall = last == undefined;
+    if (currentLine == undefined) {
+      currentLine = {
+        ...current,
+        item: { contents: [], kind: 'normal', continuationOfPreviousLine: false },
+      };
+    }
 
-  // Keep in mind (0, 0) is at the bottom left corner of the page
-  const isFirstBlockOnLine = isFirstItemOverall || current.position.y < last.position.y;
-  if (isFirstBlockOnLine) lineStartPositions.push(current.position);
+    currentLine.item.contents.push(current.item);
 
-  // Skip empty or title blocks
-  if (
-    current.item.str.trim().length == 0 ||
-    (isFirstBlockOnLine && /^ALCOHOLICS ANONYMOUS|THERE IS A SOLUTION|[0-9]+$/.test(current.item.str.trim()))
-  ) {
-    // console.log(`SKIPPING ${current.item.str}`);
-    return undefined;
+    // Big letters (The type that start a chapter) always begin a line, but have a lower y value than the line they begin
+    const currentItemIsBigLetter = current.item.str.length == 1 && current.position.height > 20;
+
+    // if this is the last line, or the next item is after a line/page break
+    if (
+      !currentItemIsBigLetter &&
+      (next == undefined || next.position.y < current.position.y || next.pageIndex > current.pageIndex)
+    ) {
+      currentLine.item = markLine(currentLine.item);
+      lines.push(currentLine);
+      currentLine = undefined;
+    }
   }
 
-  // trim hyphen, we'll add it back if necessary
-  // we only use currentStr to print results
-  const endsWithHyphen = /-$/.test(current.item.str);
-  const currentStr = endsWithHyphen ? current.item.str.slice(0, current.item.str.length - 1) : current.item.str;
+  return lines;
+}
 
-  // Find the candidates for a word broken across lines
-  const firstWordInCurrentItem: string | undefined = current.item.str.match(/^([\w\-]+)/)?.at(1);
-  const firstWordInCurrentItemIsWord: boolean = firstWordInCurrentItem && englishWords.check(firstWordInCurrentItem);
+const titles = ['ALCOHOLICS ANONYMOUS', 'THERE IS A SOLUTION'];
 
-  const lastWordInLastItem: string | undefined = last?.item.str.match(/\b(\w+)\W*$/)?.at(1);
-  const lastWordInLastItemIsWord: boolean | undefined = lastWordInLastItem && englishWords.check(lastWordInLastItem);
-  const hyphenBetween: boolean = last != undefined && /\b\w+-$/.test(last.item.str);
+// Marks lines that continue a word from
+function markWordBreaks(lines: BlockOf<MarkedLine>[]) {
+  // We manually manage the "last" element instead of using lines.at(i - 1) so we can skip the
+  // title and page numbers while preserving the last body line
+  let last: BlockOf<MarkedLine> | undefined = undefined;
 
-  // If the last index of a space is -1, there is only one word, so the index is 0
-  const wordSpanningAcrossLines: string | undefined = lastWordInLastItem && lastWordInLastItem + firstWordInCurrentItem;
-  const wordSpanningAcrossLinesIsWord: boolean | undefined =
-    wordSpanningAcrossLines && englishWords.check(wordSpanningAcrossLines.toLowerCase());
+  for (let i = 0; i < lines.length; i++) {
+    const current = lines[i];
 
-  if (isFirstItemOverall) {
-    return currentStr;
-  } else if (isFirstBlockOnLine) {
-    // console.log(`[${current.position.y}] = { x: ${current.position.x}, itemIndex: ${i} }`);
-    // if (current.item.str == '')
-    // console.log(
-    //   `lastWord: ${lastWordInLastItem}, firstWord: ${firstWordInCurrentItem}, wordSpanning: ${wordSpanningAcrossLines}, lastWordInLastItemIsWord: ${lastWordInLastItemIsWord} && firstWordInCurrentItemIsWord: ${firstWordInCurrentItemIsWord} && wordSpanningAcrossLinesIsWord: ${wordSpanningAcrossLinesIsWord}`,
-    // );
+    // Skip title lines, etc.
+    if (['title', 'chapter', 'page number'].includes(current.item.kind)) continue;
+
+    // Skip the first body line
+    if (!last) {
+      last = current;
+      continue;
+    }
+
+    const firstItemOfCurrent = current.item.contents[0];
+    const lastItemOfLast = last.item.contents[last.item.contents.length - 1];
+
+    // Find the candidates for a word broken across lines
+    const firstWordInCurrentItem: string | undefined = firstItemOfCurrent.str.match(/^([\w\-]+)/)?.at(1);
+    const firstWordInCurrentItemIsWord: boolean = firstWordInCurrentItem && englishWords.check(firstWordInCurrentItem);
+
+    const lastWordInLastItem: string | undefined = lastItemOfLast.str.match(/\b(\w+)\W*$/)?.at(1);
+    const lastWordInLastItemIsWord: boolean | undefined = lastWordInLastItem && englishWords.check(lastWordInLastItem);
+    const hyphenBetween: boolean = last != undefined && /\b\w+-$/.test(lastItemOfLast.str);
+    // Remove hyphen if it exists, we will replace it later
+    if (hyphenBetween)
+      last.item.contents[last.item.contents.length - 1].str = last.item.contents[
+        last.item.contents.length - 1
+      ].str.slice(0, -1);
+
+    // If the last index of a space is -1, there is only one word, so the index is 0
+    const wordSpanningAcrossLines: string | undefined =
+      lastWordInLastItem && lastWordInLastItem + firstWordInCurrentItem;
+    const wordSpanningAcrossLinesIsWord: boolean | undefined =
+      wordSpanningAcrossLines && englishWords.check(wordSpanningAcrossLines.toLowerCase());
 
     const bothAreWords = lastWordInLastItemIsWord && firstWordInCurrentItemIsWord;
 
@@ -145,15 +209,101 @@ function joinTextItems(
     // commented out because it caused trouble with 'We' ('W' and 'e' are words i guess???)
 
     if (lineBrokeANonHyphenatedWord) {
-      return currentStr;
+      lines[i].item.continuationOfPreviousLine = true;
     } else if (lineBrokeAHyphenatedWord) {
-      return `-${currentStr}`;
+      lines[i].item.continuationOfPreviousLine = 'keep hyphen';
     } else {
-      return `\n${currentStr}`;
+      lines[i].item.continuationOfPreviousLine = false;
     }
-  } else {
-    return ` ${currentStr}`;
+
+    last = current;
   }
+}
+
+// Marks lines that begin paragraphs in place
+function markParagraphs(lines: BlockOf<MarkedLine>[]) {
+  // We keep the original indices so we can modify the array in place
+  const linesMarkedWithIndices = lines.map((line, lineIndexOverall) => ({ lineIndexOverall, ...line }));
+
+  const pages = Map.groupBy(linesMarkedWithIndices, (line) => line.pageIndex);
+  pages.forEach((pageLines) => {
+    const linesMinusSkipped = pageLines.filter(({ item }) => item.kind == 'normal');
+
+    // Coalesce lines by the nearest quarter of an x value
+    const linesGroupedByPosition = Map.groupBy(
+      linesMinusSkipped.map(({ position, lineIndexOverall }) => ({
+        x: Math.round(position.x * 4) / 4,
+        lineIndexOverall,
+      })),
+      ({ x }) => x,
+    );
+    const linesSortedByAcendingXValue = Array.from(linesGroupedByPosition).sort((a, b) => a[0] - b[0]);
+    const linesSortedByDescendingXFrequency = Array.from(linesGroupedByPosition).sort(
+      (a, b) => b[1].length - a[1].length,
+    );
+
+    // sanity check
+    if (linesSortedByAcendingXValue[0][0] != linesSortedByDescendingXFrequency[0][0]) {
+      console.log('ERROR: The lowest X value was not the most frequent');
+      return [];
+    }
+
+    // skip the first entry with slice(1) because that's (likely) the baseline
+    linesSortedByAcendingXValue.slice(1).forEach(([, linesOnPage]) =>
+      linesOnPage.forEach(({ lineIndexOverall }) => {
+        lines[lineIndexOverall].item.kind = 'indented';
+      }),
+    );
+  });
+}
+
+// marks in place
+function markLines(lines: BlockOf<MarkedLine>[]) {
+  for (let i = 0; i < lines.length; i++) lines[i].item = markLine(lines[i].item);
+}
+
+// Marks big letters, titles, chapters, and page numbers, but not paragraphs
+function markLine(line: MarkedLine): MarkedLine {
+  const firstItem = line.contents.at(0);
+  const lineInPlainText = line.contents
+    .map((item) => item.str)
+    .reduce((p, n) => `${p} ${n}`)
+    .trim();
+
+  const titleMatches = lineInPlainText.match(/^[0-9]* *(?<title>(?:[A-Z]+ +)*[A-Z]+) *[0-9]*$/);
+  const title = titleMatches?.groups?.title;
+
+  const chapterMatches = lineInPlainText.match(/^Chapter +(?<chapter>[0-9]*)$/);
+  const chapter = chapterMatches?.groups?.chapter;
+
+  const pageNumberMatches = lineInPlainText.match(/^(?<page>[0-9]*)$/);
+  const page = pageNumberMatches?.groups?.page;
+
+  if (firstItem != undefined && firstItem.height > 20)
+    return {
+      ...line,
+      kind: 'big letter',
+    };
+  if (title && titles.includes(title))
+    return {
+      ...line,
+      kind: 'title',
+      title,
+    };
+  if (chapter)
+    return {
+      ...line,
+      kind: 'chapter',
+      chapter: Number(chapter),
+    };
+  if (page)
+    return {
+      ...line,
+      kind: 'page number',
+      page: Number(page),
+    };
+  // TODO: Rest
+  return line;
 }
 
 async function makeAllPlainText(inDirectory: string) {
