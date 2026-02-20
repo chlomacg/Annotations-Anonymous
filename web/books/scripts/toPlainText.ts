@@ -58,6 +58,7 @@ async function GetTextFromPDF(path: string): Promise<TextContent[]> {
 function positionOf(item: TextItem): Position {
   const { width, height } = item;
 
+  // If we don't add the height the giant letter that starts the chapter goes later than it should
   const y: number = item.transform[5] + height;
   const x: number = item.transform[4];
 
@@ -72,8 +73,8 @@ function parseFile(content: TextContent[]): string {
         .filter((item) => 'str' in item)
         .map((item) => ({ item, position: positionOf(item), pageIndex }))
         .sort((a, b) => {
-          // A lower y value means lower on the page. Top to bottom first.
-          // If we don't add the height the giant letter that starts the chapter goes later than it should
+          // The origin is in the bottom-left of the page, so a lower y value means lower on the page.
+          // We want to sort it top to bottom first.
           if (a.position.y < b.position.y) return 1;
           // but a lower x value means closer to the start of the line (left in English). Left-to-right second
           if (a.position.y == b.position.y) return a.position.x - b.position.x;
