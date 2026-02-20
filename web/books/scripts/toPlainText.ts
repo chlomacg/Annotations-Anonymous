@@ -185,10 +185,11 @@ function markWordBreaks(lines: BlockOf<MarkedLine>[]) {
 
     // Find the candidates for a word broken across lines
     const firstWordInCurrentItem: string | undefined = firstItemOfCurrent.str.match(/^([\w\-]+)/)?.at(1);
-    const firstWordInCurrentItemIsWord: boolean = firstWordInCurrentItem && englishWords.check(firstWordInCurrentItem);
+    const firstWordInCurrentItemIsWord: boolean =
+      firstWordInCurrentItem != undefined && englishWords.check(firstWordInCurrentItem);
 
     const lastWordInLastItem: string | undefined = lastItemOfLast.str.match(/\b(\w+)\W*$/)?.at(1);
-    const lastWordInLastItemIsWord: boolean | undefined = lastWordInLastItem && englishWords.check(lastWordInLastItem);
+    const lastWordInLastItemIsWord: boolean = lastWordInLastItem != undefined && englishWords.check(lastWordInLastItem);
     const hyphenBetween: boolean = last != undefined && /\b\w+-$/.test(lastItemOfLast.str);
     // Remove hyphen if it exists, we will replace it later
     if (hyphenBetween)
@@ -199,8 +200,8 @@ function markWordBreaks(lines: BlockOf<MarkedLine>[]) {
     // If the last index of a space is -1, there is only one word, so the index is 0
     const wordSpanningAcrossLines: string | undefined =
       lastWordInLastItem && lastWordInLastItem + firstWordInCurrentItem;
-    const wordSpanningAcrossLinesIsWord: boolean | undefined =
-      wordSpanningAcrossLines && englishWords.check(wordSpanningAcrossLines.toLowerCase());
+    const wordSpanningAcrossLinesIsWord: boolean =
+      wordSpanningAcrossLines != undefined && englishWords.check(wordSpanningAcrossLines.toLowerCase());
 
     const bothAreWords = lastWordInLastItemIsWord && firstWordInCurrentItemIsWord;
 
