@@ -31,11 +31,13 @@ async function makeAllPlainText(directory: string) {
 }
 
 async function makeAllHTML(directory: string) {
-  const html = await processDirectory(
+  const parsed: Parsed[] = await processDirectory(
     directory,
-    async (path) => console.log(path), // todo
+    async (path) => getTextFromPDF(path).then(convertFileToHTML),
     'Converted to html',
-  );
+  ).then((arr) => arr.flat(1));
+
+  console.dir(parsed, { depth: null });
 }
 
 async function processDirectory<T>(
@@ -118,27 +120,22 @@ function positionOf(item: TextItem): Position {
   return { x, y, width, height };
 }
 
-function convertFileToPlainText(content: TextContent[]): string {
-  let str = '';
-  const textItems: BlockOf<TextItem>[] = content
-    .map((c, pageIndex) =>
-      c.items
-        .filter((item) => 'str' in item)
-        .map((item) => ({ item, position: positionOf(item), pageIndex }))
-        .sort((a, b) => {
-          // The origin is in the bottom-left of the page, so a lower y value means lower on the page.
-          // We want to sort it top to bottom first.
-          if (a.position.y < b.position.y) return 1;
-          // but a lower x value means closer to the start of the line (left in English). Left-to-right second
-          if (a.position.y == b.position.y) return a.position.x - b.position.x;
-          // else y(a) > y(b)
-          return -1;
-        }),
-    )
-    .flat(1);
-  console.log(textItems.map(({ item }) => item.str).reduce((p, c) => p + ',' + c));
-
-  // let currPage = 0;
+// Fully marks all line and item info
+function processText(content: TextContent[]): BlockOf<MarkedLine>[] {
+  const textItems: BlockOf<TextItem>[] = content.flatMap((c, pageIndex) =>
+    c.items
+      .filter((item) => 'str' in item)
+      .map((item) => ({ item, position: positionOf(item), pageIndex }))
+      .sort((a, b) => {
+        // The origin is in the bottom-left of the page, so a lower y value means lower on the page.
+        // We want to sort it top to bottom first.
+        if (a.position.y < b.position.y) return 1;
+        // but a lower x value means closer to the start of the line (left in English). Left-to-right second
+        if (a.position.y == b.position.y) return a.position.x - b.position.x;
+        // else y(a) > y(b)
+        return -1;
+      }),
+  );
 
   const lines = getGraphicalLines(textItems);
 
@@ -146,6 +143,54 @@ function convertFileToPlainText(content: TextContent[]): string {
   markParagraphs(lines);
   markWordBreaks(lines);
   markFootnotes(lines);
+
+  return lines;
+}
+
+import type { BodyText, Paragraph, ParagraphBody, ParagraphBodyItem, Parsed } from './lib/outputJSON.ts';
+
+function convertFileToHTML(content: TextContent[]): Parsed[] {
+  const lines = processText(content);
+
+  const paragraphs: BlockOf<MarkedLine>[][] = [];
+  // Non-paragraph elements that interrupt a paragraph go after it
+  // (there's no reason to be tied down to the layout Bill W picked!)
+  let nonParagraphs: BlockOf<MarkedLine>[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    switch (lines[i].item.kind) {
+      case 'big letter':
+      case 'indented':
+        for (let i = 0; i < nonParagraphs.length; i++) paragraphs.push([nonParagraphs[i]]);
+        paragraphs.push([lines[i]]);
+        nonParagraphs = [];
+        break;
+      case 'normal':
+        paragraphs[paragraphs.length - 1].push(lines[i]);
+        break;
+      case 'chapter':
+      case 'footnote':
+        nonParagraphs.push(lines[i]);
+        break;
+      // We Don't Like These Very Much.
+      case 'title':
+      case 'page number':
+    }
+  }
+
+  const elements: Parsed[] = [];
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    const element = processParagraph(paragraphs[i]);
+    if (element != undefined) elements.push(element);
+  }
+
+  return elements;
+}
+
+function convertFileToPlainText(content: TextContent[]): string {
+  let str = '';
+  const lines = processText(content);
 
   let isFirstPrintedLine = true;
   lines.forEach((line) => {
@@ -170,16 +215,144 @@ function convertFileToPlainText(content: TextContent[]): string {
     }
   });
 
-  // console.log(
-  //   lines.map(({ item }) => ({
-  //     str: item.contents.map(({ str }) => str).reduce((p, n) => `${p}|${n}`),
-  //     kind: item.kind,
-  //     continuation: item.continuationOfPreviousLine,
-  //   })),
-  // );
   console.log(str);
 
   return str;
+}
+
+function makeBody(source: MarkedLine & { pageIndex: number }): ParagraphBody {
+  const symbols = '*';
+  const body: ParagraphBody = [];
+
+  for (let i = 0; i < source.contents.length; i++) {
+    const currentItem = source.contents[i];
+    const lastItemAppended = body.at(body.length - 1);
+
+    const currentIsFootnoteReference = symbols.includes(currentItem.str);
+
+    if (lastItemAppended == undefined)
+      body.push({ kind: 'text', text: currentItem.str, continuationOfPreviousItem: source.continuationOfPreviousLine });
+    else if (lastItemAppended.kind == 'text' && !currentIsFootnoteReference)
+      body[body.length - 1] = { ...lastItemAppended, text: lastItemAppended.text + ' ' + currentItem.str };
+    else if (currentIsFootnoteReference)
+      body.push({ kind: 'footnote reference', symbol: currentItem.str, pageOfReferencedFootnote: source.pageIndex });
+  }
+
+  return body;
+
+  return [
+    {
+      kind: 'text',
+      text: source.contents.map(({ str }) => str).join(' '),
+      continuationOfPreviousItem: source.continuationOfPreviousLine,
+    },
+  ];
+}
+
+function processParagraph(linesOfParagraph: BlockOf<MarkedLine>[]): Parsed | undefined {
+  console.log(
+    linesOfParagraph.map(
+      (line) => `kind: ${line.item.kind}, contents: ${line.item.contents.map(({ str }) => str).join(' ')}`,
+    ),
+  );
+  if (linesOfParagraph.length == 1) {
+    const item = linesOfParagraph[0].item;
+    const { pageIndex } = linesOfParagraph[0];
+
+    switch (item.kind) {
+      case 'chapter':
+        return { kind: 'chapter', text: `Chapter ${item.chapter}` };
+      case 'big letter':
+        return {
+          kind: 'paragraph',
+          bigLetter: item.contents[0].str,
+          body: makeBody({ ...item, contents: item.contents.slice(1), pageIndex }),
+        };
+      case 'footnote':
+        return { kind: 'footnote', symbol: item.symbol, text: item.note };
+      case 'indented':
+        return { kind: 'paragraph', body: makeBody({ ...item, pageIndex }) };
+      case 'page number':
+      case 'title':
+      case 'normal':
+        console.error(`ERROR: unsupported kind ${item.kind} in singlet paragraph`);
+        return undefined;
+    }
+  }
+
+  let parsedParagraph: Paragraph;
+
+  // Take care of the first line separately since it's the only one that might be a big letter
+  const firstLine = linesOfParagraph[0].item;
+  if (firstLine.kind == 'big letter') {
+    const [firstItem, ...rest] = firstLine.contents;
+    const { pageIndex } = linesOfParagraph[0];
+
+    parsedParagraph = {
+      kind: 'paragraph',
+      bigLetter: firstItem.str,
+      body: makeBody({ ...firstLine, pageIndex, contents: rest }),
+    };
+  } else if (firstLine.kind == 'indented') {
+    const { pageIndex } = linesOfParagraph[0];
+
+    parsedParagraph = { kind: 'paragraph', body: makeBody({ ...firstLine, pageIndex }) };
+  } else {
+    console.error(`ERROR: unsupported kind ${firstLine.kind} in start of paragraph`);
+    return undefined;
+  }
+
+  for (let i = 1; i < linesOfParagraph.length; i++) {
+    const line = linesOfParagraph[i];
+    const { pageIndex } = linesOfParagraph[i];
+
+    if (line.item.kind == 'normal') {
+      parsedParagraph.body = parsedParagraph.body.concat(makeBody({ ...line.item, pageIndex }));
+    } else {
+      console.error(`ERROR: unsupported kind ${line.item.kind} in non-start of paragraph`);
+      return undefined;
+    }
+  }
+
+  return mergeTextItems(parsedParagraph);
+}
+
+function mergeTextItems(paragraph: Paragraph): Paragraph {
+  const body: ParagraphBody = [];
+
+  for (let i = 0; i < paragraph.body.length; i++) {
+    const curr: ParagraphBodyItem = paragraph.body[i];
+    const prev: ParagraphBodyItem | undefined = body.at(body.length - 1);
+
+    if (!prev || prev.kind != 'text' || curr.kind != 'text') {
+      body.push(curr);
+    } else {
+      body[body.length - 1] = { ...prev, text: mergeWords(prev, curr) };
+    }
+  }
+
+  return {
+    ...paragraph,
+    body,
+  };
+}
+
+function mergeWords(before: BodyText, after: BodyText): string {
+  const continued = after.continuationOfPreviousItem;
+  let deliminator;
+  switch (continued) {
+    case 'keep hyphen':
+      deliminator = '-';
+      break;
+    case true:
+      deliminator = '';
+      break;
+    case false:
+      deliminator = ' ';
+      break;
+  }
+
+  return `${before.text}${deliminator}${after.text}`;
 }
 
 // Returns an array of the lines that are graphically represented. The lines do not
@@ -348,21 +521,22 @@ function markParagraphs(lines: BlockOf<MarkedLine>[]) {
       })),
       ({ x }) => x,
     );
-    const linesSortedByAcendingXValue = Array.from(linesGroupedByPosition).sort((a, b) => a[0] - b[0]);
+    const linesSortedByAscendingXValue = Array.from(linesGroupedByPosition).sort((a, b) => a[0] - b[0]);
     const linesSortedByDescendingXFrequency = Array.from(linesGroupedByPosition).sort(
       (a, b) => b[1].length - a[1].length,
     );
 
     // sanity check
-    if (linesSortedByAcendingXValue[0][0] != linesSortedByDescendingXFrequency[0][0]) {
-      console.log('ERROR: The lowest X value was not the most frequent');
+    if (linesSortedByAscendingXValue[0][0] != linesSortedByDescendingXFrequency[0][0]) {
+      console.log('ERROR: The leftmost X value was not the most frequent');
       return [];
     }
 
     // skip the first entry with slice(1) because that's (likely) the baseline
-    linesSortedByAcendingXValue.slice(1).forEach(([, linesOnPage]) =>
+    linesSortedByAscendingXValue.slice(1).forEach(([, linesOnPage]) =>
       linesOnPage.forEach(({ lineIndexOverall }) => {
-        lines[lineIndexOverall].item.kind = 'indented';
+        // There is often a "ghost indent" the line after a big letter, and big letters are never a singlet paragraph
+        if (lines.at(lineIndexOverall - 1)?.item.kind != 'big letter') lines[lineIndexOverall].item.kind = 'indented';
       }),
     );
   });
