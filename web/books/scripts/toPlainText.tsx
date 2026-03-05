@@ -162,8 +162,8 @@ function convertFileToHTML(content: TextContent[]): Parsed[] {
       case 'big letter':
       case 'indented':
         for (let i = 0; i < nonParagraphs.length; i++) paragraphs.push([nonParagraphs[i]]);
-        paragraphs.push([lines[i]]);
         nonParagraphs = [];
+        paragraphs.push([lines[i]]);
         break;
       case 'normal':
         paragraphs[paragraphs.length - 1].push(lines[i]);
@@ -178,10 +178,20 @@ function convertFileToHTML(content: TextContent[]): Parsed[] {
     }
   }
 
+  const fontNames = Map.groupBy(
+    paragraphs.flatMap((p) => p.flatMap(({ item }) => item.contents.map(({ str, fontName }) => ({ str, fontName })))),
+    ({ fontName }) => fontName,
+  );
+
+  let italicFontName: string | undefined;
+  fontNames.forEach((strs) => {
+    if (strs[0].str.startsWith('Chapter')) italicFontName = strs[0].fontName;
+  });
+
   const elements: Parsed[] = [];
 
   for (let i = 0; i < paragraphs.length; i++) {
-    const element = processParagraph(paragraphs[i]);
+    const element = processParagraph(paragraphs[i], italicFontName!);
     if (element != undefined) elements.push(element);
   }
 
@@ -220,41 +230,37 @@ function convertFileToPlainText(content: TextContent[]): string {
   return str;
 }
 
-function makeBody(source: MarkedLine & { pageIndex: number }): ParagraphBody {
-  const symbols = '*';
+function makeBody(source: MarkedLine & { pageIndex: number }, italicFontName: string): ParagraphBody {
   const body: ParagraphBody = [];
 
   for (let i = 0; i < source.contents.length; i++) {
     const currentItem = source.contents[i];
     const lastItemAppended = body.at(body.length - 1);
 
-    const currentIsFootnoteReference = symbols.includes(currentItem.str);
+    const currentStyle = { italicized: currentItem.fontName == italicFontName };
+    const currentIsFootnoteReference = isFootnoteSymbol(currentItem.str);
 
-    if (lastItemAppended == undefined)
-      body.push({ kind: 'text', text: currentItem.str, continuationOfPreviousItem: source.continuationOfPreviousLine });
-    else if (lastItemAppended.kind == 'text' && !currentIsFootnoteReference)
+    if (
+      lastItemAppended == undefined ||
+      (lastItemAppended?.kind == 'text' && lastItemAppended.style.italicized != currentStyle.italicized)
+    ) {
+      body.push({
+        kind: 'text',
+        text: currentItem.str,
+        continuationOfPreviousItem: source.continuationOfPreviousLine,
+        style: currentStyle,
+      });
+    } else if (lastItemAppended.kind == 'text' && !currentIsFootnoteReference) {
       body[body.length - 1] = { ...lastItemAppended, text: lastItemAppended.text + ' ' + currentItem.str };
-    else if (currentIsFootnoteReference)
+    } else if (currentIsFootnoteReference) {
       body.push({ kind: 'footnote reference', symbol: currentItem.str, pageOfReferencedFootnote: source.pageIndex });
+    }
   }
 
   return body;
-
-  return [
-    {
-      kind: 'text',
-      text: source.contents.map(({ str }) => str).join(' '),
-      continuationOfPreviousItem: source.continuationOfPreviousLine,
-    },
-  ];
 }
 
-function processParagraph(linesOfParagraph: BlockOf<MarkedLine>[]): Parsed | undefined {
-  console.log(
-    linesOfParagraph.map(
-      (line) => `kind: ${line.item.kind}, contents: ${line.item.contents.map(({ str }) => str).join(' ')}`,
-    ),
-  );
+function processParagraph(linesOfParagraph: BlockOf<MarkedLine>[], italicFontName: string): Parsed | undefined {
   if (linesOfParagraph.length == 1) {
     const item = linesOfParagraph[0].item;
     const { pageIndex } = linesOfParagraph[0];
@@ -266,12 +272,12 @@ function processParagraph(linesOfParagraph: BlockOf<MarkedLine>[]): Parsed | und
         return {
           kind: 'paragraph',
           bigLetter: item.contents[0].str,
-          body: makeBody({ ...item, contents: item.contents.slice(1), pageIndex }),
+          body: makeBody({ ...item, contents: item.contents.slice(1), pageIndex }, italicFontName),
         };
       case 'footnote':
-        return { kind: 'footnote', symbol: item.symbol, text: item.note };
+        return { kind: 'footnote', symbol: item.symbol, text: item.note, pageIndex };
       case 'indented':
-        return { kind: 'paragraph', body: makeBody({ ...item, pageIndex }) };
+        return { kind: 'paragraph', body: makeBody({ ...item, pageIndex }, italicFontName) };
       case 'page number':
       case 'title':
       case 'normal':
@@ -291,12 +297,12 @@ function processParagraph(linesOfParagraph: BlockOf<MarkedLine>[]): Parsed | und
     parsedParagraph = {
       kind: 'paragraph',
       bigLetter: firstItem.str,
-      body: makeBody({ ...firstLine, pageIndex, contents: rest }),
+      body: makeBody({ ...firstLine, pageIndex, contents: rest }, italicFontName),
     };
   } else if (firstLine.kind == 'indented') {
     const { pageIndex } = linesOfParagraph[0];
 
-    parsedParagraph = { kind: 'paragraph', body: makeBody({ ...firstLine, pageIndex }) };
+    parsedParagraph = { kind: 'paragraph', body: makeBody({ ...firstLine, pageIndex }, italicFontName) };
   } else {
     console.error(`ERROR: unsupported kind ${firstLine.kind} in start of paragraph`);
     return undefined;
@@ -307,7 +313,7 @@ function processParagraph(linesOfParagraph: BlockOf<MarkedLine>[]): Parsed | und
     const { pageIndex } = linesOfParagraph[i];
 
     if (line.item.kind == 'normal') {
-      parsedParagraph.body = parsedParagraph.body.concat(makeBody({ ...line.item, pageIndex }));
+      parsedParagraph.body = parsedParagraph.body.concat(makeBody({ ...line.item, pageIndex }, italicFontName));
     } else {
       console.error(`ERROR: unsupported kind ${line.item.kind} in non-start of paragraph`);
       return undefined;
@@ -324,7 +330,7 @@ function mergeTextItems(paragraph: Paragraph): Paragraph {
     const curr: ParagraphBodyItem = paragraph.body[i];
     const prev: ParagraphBodyItem | undefined = body.at(body.length - 1);
 
-    if (!prev || prev.kind != 'text' || curr.kind != 'text') {
+    if (!prev || prev.kind != 'text' || curr.kind != 'text' || prev.style.italicized != curr.style.italicized) {
       body.push(curr);
     } else {
       body[body.length - 1] = { ...prev, text: mergeWords(prev, curr) };
@@ -455,13 +461,13 @@ function markWordBreaks(lines: BlockOf<MarkedLine>[]) {
   }
 }
 
+function isFootnoteSymbol(s: string) {
+  const symbolList = ['*'];
+  return symbolList.includes(s);
+}
+
 // Marks lines that contain or reference footnotes in place
 function markFootnotes(lines: BlockOf<MarkedLine>[]) {
-  function isSymbol(s: string) {
-    const symbolList = ['*'];
-    return symbolList.includes(s);
-  }
-
   // We keep the original indices so we can modify the array in place
   const linesMarkedWithIndices = lines.map((line, lineIndexOverall) => ({ lineIndexOverall, ...line }));
 
@@ -470,7 +476,7 @@ function markFootnotes(lines: BlockOf<MarkedLine>[]) {
     const footnoteSymbols = [];
 
     // Iterate backwards until we hit a line that doesn't start with a symbol
-    for (let i = linesInPage.length - 1; i >= 0 && isSymbol(linesInPage[i].item.contents[0].str); i--) {
+    for (let i = linesInPage.length - 1; i >= 0 && isFootnoteSymbol(linesInPage[i].item.contents[0].str); i--) {
       const symbol = linesInPage[i].item.contents[0].str;
       const indexOverall = linesInPage[i].lineIndexOverall;
 
