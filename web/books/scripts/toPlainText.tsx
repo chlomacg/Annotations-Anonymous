@@ -23,7 +23,7 @@ async function main() {
 async function makeAllPlainText(directory: string) {
   const plainText = await processDirectory(
     directory,
-    (path) => getTextFromPDF(path).then(convertFileToPlainText),
+    (path) => getTextFromPDF(path).then((text) => convertFileToPlainText(text, path)),
     'Converted to plain text',
   );
 
@@ -33,7 +33,7 @@ async function makeAllPlainText(directory: string) {
 async function makeAllHTML(directory: string) {
   const parsed: Parsed[] = await processDirectory(
     directory,
-    async (path) => getTextFromPDF(path).then(convertFileToHTML),
+    async (path) => getTextFromPDF(path).then((text) => convertFileToHTML(text, path)),
     'Converted to html',
   ).then((arr) => arr.flat(1));
 
@@ -50,6 +50,7 @@ async function processDirectory<T>(
 
   const dir = `${parentDir}/${directory}`;
   const files = await readdir(dir);
+  files.sort();
 
   const time1 = new Date();
   const out = await Promise.all(files.map((file) => process(`${dir}/${file}`)));
@@ -63,6 +64,7 @@ async function processDirectory<T>(
 
 type BlockOf<T> = {
   item: T;
+  file: string;
   position: Position;
   pageIndex: number;
 };
@@ -121,11 +123,11 @@ function positionOf(item: TextItem): Position {
 }
 
 // Fully marks all line and item info
-function processText(content: TextContent[]): BlockOf<MarkedLine>[] {
+function processText(content: TextContent[], path: string): BlockOf<MarkedLine>[] {
   const textItems: BlockOf<TextItem>[] = content.flatMap((c, pageIndex) =>
     c.items
       .filter((item) => 'str' in item)
-      .map((item) => ({ item, position: positionOf(item), pageIndex }))
+      .map((item) => ({ item, position: positionOf(item), file: path, pageIndex }))
       .sort((a, b) => {
         // The origin is in the bottom-left of the page, so a lower y value means lower on the page.
         // We want to sort it top to bottom first.
@@ -149,8 +151,8 @@ function processText(content: TextContent[]): BlockOf<MarkedLine>[] {
 
 import type { BodyText, Paragraph, ParagraphBody, ParagraphBodyItem, Parsed } from './lib/outputJSON.ts';
 
-function convertFileToHTML(content: TextContent[]): Parsed[] {
-  const lines = processText(content);
+function convertFileToHTML(content: TextContent[], path: string): Parsed[] {
+  const lines = processText(content, path);
 
   const paragraphs: BlockOf<MarkedLine>[][] = [];
   // Non-paragraph elements that interrupt a paragraph go after it
@@ -198,9 +200,9 @@ function convertFileToHTML(content: TextContent[]): Parsed[] {
   return elements;
 }
 
-function convertFileToPlainText(content: TextContent[]): string {
+function convertFileToPlainText(content: TextContent[], path: string): string {
   let str = '';
-  const lines = processText(content);
+  const lines = processText(content, path);
 
   let isFirstPrintedLine = true;
   lines.forEach((line) => {
@@ -534,7 +536,9 @@ function markParagraphs(lines: BlockOf<MarkedLine>[]) {
 
     // sanity check
     if (linesSortedByAscendingXValue[0][0] != linesSortedByDescendingXFrequency[0][0]) {
-      console.log('ERROR: The leftmost X value was not the most frequent');
+      console.log(
+        `ERROR: The leftmost X value was not the most frequent in '${lines[0].file}' (line ${linesSortedByAscendingXValue[0][1][0].lineIndexOverall} vs ${linesSortedByDescendingXFrequency[0][1][0].lineIndexOverall})`,
+      );
       return [];
     }
 
