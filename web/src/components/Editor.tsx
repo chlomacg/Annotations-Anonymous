@@ -1,6 +1,5 @@
 import { trpc, queryClient, type Session } from '@/lib/backend';
 import {
-  useEditor,
   PortableTextEditable,
   type BlockRenderProps,
   type PortableTextBlock,
@@ -9,17 +8,19 @@ import {
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Toolbar } from './EditorToolbar';
+import { EventListenerPlugin } from '@portabletext/editor/plugins';
+import { useState } from 'react';
 
 export function Editor({
   session,
   promptLogin,
-  content,
+  resetEditor,
 }: {
   session: Session | null;
   promptLogin: () => void;
-  content?: PortableTextBlock[];
+  resetEditor: () => void;
 }) {
-  const editor = useEditor();
+  const [content, setContent] = useState<PortableTextBlock[] | undefined>(undefined);
 
   const sendPostMutation = useMutation({
     ...trpc.post.send.mutationOptions(),
@@ -28,8 +29,7 @@ export function Editor({
       const queryKey = trpc.post.fetchMostRecent.queryKey();
       await queryClient.invalidateQueries({ queryKey });
 
-      // Clear editor
-      editor.send({ type: 'update value', value: [] });
+      resetEditor();
       toast('Post sent!');
     },
     onError: async () => {
@@ -50,6 +50,13 @@ export function Editor({
 
   return (
     <>
+      <EventListenerPlugin
+        on={(event) => {
+          if (event.type === 'mutation') {
+            setContent(event.value);
+          }
+        }}
+      />
       <PortableTextEditable
         className="text-lg focus:outline-none active:outline-none py-2"
         renderPlaceholder={() => <span className="text-gray-500">Blaze your glory...</span>}

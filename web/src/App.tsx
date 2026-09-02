@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { EditorContext } from './components/EditorContext';
 import { Feed } from './components/Feed';
 import { authClient } from './lib/backend';
 import { Button } from './components/ui/button';
 import { LoginDialog } from './components/LoginDialog';
 import { toast } from 'sonner';
+import { Editor } from './components/Editor';
 
 function App() {
   const {
@@ -17,8 +18,16 @@ function App() {
   const [loginPrompted, setLoginPrompted] = useState(false);
   const [prompt, setPrompt] = useState({ message: '', description: '' });
 
+  const [editorKey, setEditorKey] = useState(0);
+  const resetEditor = useCallback(() => {
+    setEditorKey((k) => {
+      console.log(k);
+      return k + 1;
+    });
+  }, []);
+
   return (
-    <div className="min-h-screen antialiased flex flex-row justify-center bg-amber-50 text-black dark:bg-slate-900 dark:text-white relative z-0">
+    <div className="min-h-screen antialiased bg-amber-50 text-black dark:bg-slate-900 dark:text-white flex flex-row justify-center  relative z-0">
       <LoginDialog prompt={prompt} loginPrompted={loginPrompted} setLoginPrompted={setLoginPrompted} />
       {session ? (
         <Button
@@ -47,17 +56,20 @@ function App() {
       <div className="py-4 divide-y-2 dark:divide-gray-400 w-90 md:w-130 flex flex-col">
         <div className="flex flex-row gap-2">
           {session && <img src="/chloe.jpg" alt="A profile picture" className="w-9 h-9 rounded-full" />}
-          <EditorContext
-            session={session}
-            promptLogin={() => {
-              setPrompt({
-                message: 'Please sign in to post',
-                description: 'Your post will be waiting for you',
-              });
+          <EditorContext key={editorKey}>
+            <Editor
+              session={session}
+              resetEditor={resetEditor}
+              promptLogin={() => {
+                setPrompt({
+                  message: 'Please sign in to post',
+                  description: 'Your post will be waiting for you',
+                });
 
-              setLoginPrompted(true);
-            }}
-          />
+                setLoginPrompted(true);
+              }}
+            />
+          </EditorContext>
         </div>
         <Feed />
       </div>
