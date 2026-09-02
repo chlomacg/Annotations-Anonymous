@@ -2,8 +2,8 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import z from 'zod';
 import { db } from './db';
 import superjson from 'superjson';
-import { ChangeFieldIn, json, Simplify } from './util';
-import { PortableTextBlock } from '@portabletext/editor';
+import { type ChangeFieldIn, json, type Simplify } from './util';
+import { type PortableTextBlock } from '@portabletext/editor';
 
 // created for each request
 export const createContext = () => ({
