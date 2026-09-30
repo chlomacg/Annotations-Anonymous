@@ -5,6 +5,7 @@ export type Normal = {
 // First line of paragraph
 export type Indented = {
   kind: 'indented';
+  indentLevel: number;
 };
 // First body line of chapter begins with a large letter
 export type BigLetter = {
@@ -23,6 +24,12 @@ export type Title = {
 export type PageNumber = {
   kind: 'page number';
   page: number;
+};
+export type ListItem = {
+  kind: 'list item';
+  number: [string, number];
+  listId: number;
+  restOfLine: string;
 };
 export type Footnote = {
   kind: 'footnote';

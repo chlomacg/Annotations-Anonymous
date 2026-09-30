@@ -2,7 +2,7 @@ import { HeartIcon, RefreshCw, MessageSquare } from 'lucide-react';
 import { queryClient, trpc } from '../lib/backend';
 import { useMutation, useQuery } from '@tanstack/react-query';
 
-export function InteractionButtons({ postId }: { postId: string }) {
+export function InteractionButtons({ postId, promptLogin }: { postId: string; promptLogin: () => void }) {
   const userInteractionsQuery = useQuery(
     trpc.post.interactions.byUser.queryOptions(postId, {
       initialData: { postId, liked: false, reposted: false },

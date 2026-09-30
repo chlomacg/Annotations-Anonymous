@@ -3,7 +3,7 @@ import { trpc } from '../lib/backend';
 import { Post } from './Post';
 import { InteractionButtons } from './PostInteractionButtons';
 
-export function Feed() {
+export function Feed({ promptLogin }: { promptLogin: () => void }) {
   const { isPending, error, data: posts } = useQuery(trpc.post.fetchMostRecent.queryOptions(50));
 
   return isPending
@@ -13,7 +13,7 @@ export function Feed() {
       : posts.map((postData) => (
           <div className="flex flex-col gap-6 py-4" key={postData.id}>
             <Post postData={postData} />
-            <InteractionButtons postId={postData.id} />
+            <InteractionButtons postId={postData.id} promptLogin={promptLogin} />
           </div>
         ));
 }

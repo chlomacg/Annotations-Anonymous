@@ -8,22 +8,28 @@ const englishWords = isWord('american-english');
 
 async function main() {
   const mode: string = process.argv[2];
-  const dir = 'AA-test';
+  const dir = 'big-book-pdfs';
 
   switch (mode) {
     case 'plain-text':
       return makeAllPlainText(dir);
     case 'html':
       return makeAllHTML(dir);
+    case 'debug-plaintext-no-print':
+      if (process.argv.length < 4) {
+        console.error('ERROR: Please pass the name of the file to debug with!');
+        process.exit(1);
+      }
+      return debug(process.argv[3]);
     default:
-      console.log(`invalid mode ${mode}`);
+      console.error(`invalid mode ${mode}`);
   }
 }
 
 async function makeAllPlainText(directory: string) {
   const plainText = await processDirectory(
     directory,
-    (path) => getTextFromPDF(path).then((text) => convertFileToPlainText(text, path)),
+    (path) => getTextFromPDF(path).then((text) => convertToPlainText(text, path)),
     'Converted to plain text',
   );
 
@@ -33,11 +39,20 @@ async function makeAllPlainText(directory: string) {
 async function makeAllHTML(directory: string) {
   const parsed: Parsed[] = await processDirectory(
     directory,
-    async (path) => getTextFromPDF(path).then((text) => convertFileToHTML(text, path)),
+    async (path) => getTextFromPDF(path).then((text) => convertToHTML(text, path)),
     'Converted to html',
   ).then((arr) => arr.flat(1));
 
   console.dir(parsed, { depth: null });
+}
+
+async function debug(file: string) {
+  const currentDir = import.meta.dirname;
+  const parentDir = currentDir.slice(0, currentDir.lastIndexOf('/'));
+  const fullPath = `${parentDir}/big-book-pdfs/${file}`;
+
+  const out = await getTextFromPDF(fullPath).then((text) => convertToPlainText(text, fullPath));
+  console.log(out);
 }
 
 async function processDirectory<T>(
@@ -57,7 +72,7 @@ async function processDirectory<T>(
   const time2 = new Date();
 
   const elapsed2 = convert(time2.getTime() - time1.getTime(), 'ms').to('best');
-  console.log(`${processName} in ${elapsed2.toString()}`);
+  console.error(`${processName} in ${elapsed2.toString()}`);
 
   return out;
 }
@@ -67,8 +82,10 @@ type BlockOf<T> = {
   file: string;
   position: Position;
   pageIndex: number;
+  lineIndex: number;
 };
 
+// The origin is in the bottom-left of the page, so a lower y value means lower on the page.
 type Position = {
   x: number;
   y: number;
@@ -95,6 +112,7 @@ type LineType =
   | LineKind.Indented
   | LineKind.BigLetter
   | LineKind.PageNumber
+  | LineKind.ListItem
   | LineKind.Footnote;
 
 async function getTextFromPDF(path: string): Promise<TextContent[]> {
@@ -123,17 +141,19 @@ function positionOf(item: TextItem): Position {
 }
 
 // Fully marks all line and item info
-function processText(content: TextContent[], path: string): BlockOf<MarkedLine>[] {
+function makeMarkedLines(content: TextContent[], path: string): BlockOf<MarkedLine>[] {
   const textItems: BlockOf<TextItem>[] = content.flatMap((c, pageIndex) =>
     c.items
       .filter((item) => 'str' in item)
-      .map((item) => ({ item, position: positionOf(item), file: path, pageIndex }))
+      // .map((item) => ({ ...item, str: item.str.replaceAll('—', ' — ') }))
+      .map((item, lineIndex) => ({ item, position: positionOf(item), file: path, pageIndex, lineIndex }))
       .sort((a, b) => {
+        const closeEnough = Math.abs(a.position.y - b.position.y) < 0.5;
         // The origin is in the bottom-left of the page, so a lower y value means lower on the page.
         // We want to sort it top to bottom first.
         if (a.position.y < b.position.y) return 1;
         // but a lower x value means closer to the start of the line (left in English). Left-to-right second
-        if (a.position.y == b.position.y) return a.position.x - b.position.x;
+        if (closeEnough) return a.position.x - b.position.x;
         // else y(a) > y(b)
         return -1;
       }),
@@ -142,37 +162,56 @@ function processText(content: TextContent[], path: string): BlockOf<MarkedLine>[
   const lines = getGraphicalLines(textItems);
 
   markLines(lines);
-  markParagraphs(lines);
-  markWordBreaks(lines);
+  markIndents(lines);
+  markBrokenWords(lines);
   markFootnotes(lines);
 
   return lines;
 }
 
 import type { BodyText, Paragraph, ParagraphBody, ParagraphBodyItem, Parsed } from './lib/outputJSON.ts';
+import { parseIntOrRomanOrSpelledNumber } from './lib/parseInt.ts';
 
-function convertFileToHTML(content: TextContent[], path: string): Parsed[] {
-  const lines = processText(content, path);
+function convertToHTML(content: TextContent[], path: string): Parsed[] {
+  const lines = makeMarkedLines(content, path);
 
   const paragraphs: BlockOf<MarkedLine>[][] = [];
   // Non-paragraph elements that interrupt a paragraph go after it
-  // (there's no reason to be tied down to the layout Bill W picked!)
+  // (there's no reason to be tied down to the current layout!)
   let nonParagraphs: BlockOf<MarkedLine>[] = [];
 
   for (let i = 0; i < lines.length; i++) {
-    switch (lines[i].item.kind) {
+    const currentLine = lines[i];
+    switch (currentLine.item.kind) {
       case 'big letter':
-      case 'indented':
         for (let i = 0; i < nonParagraphs.length; i++) paragraphs.push([nonParagraphs[i]]);
         nonParagraphs = [];
-        paragraphs.push([lines[i]]);
+        paragraphs.push([currentLine]);
         break;
+      case 'indented':
+        const startOfLastParagraph = paragraphs.at(paragraphs.length - 1)?.at(0)?.item;
+        const lastIndentLevel = startOfLastParagraph?.kind == 'indented' && startOfLastParagraph.indentLevel;
+        const currentIndentLevel = currentLine.item.indentLevel;
+
+        if (lastIndentLevel == currentIndentLevel) {
+          paragraphs[paragraphs.length - 1].push(currentLine);
+        } else {
+          for (let i = 0; i < nonParagraphs.length; i++) paragraphs.push([nonParagraphs[i]]);
+          paragraphs.push([currentLine]);
+        }
+
+        break;
+
       case 'normal':
-        paragraphs[paragraphs.length - 1].push(lines[i]);
+        if (paragraphs.length == 0) {
+          console.error("Warning: trying to push to a paragraph, but one hasn't been started.");
+          console.error(currentLine.item.contents.map((item) => item.str));
+        }
+        paragraphs.at(-1)?.push(currentLine);
         break;
       case 'chapter':
       case 'footnote':
-        nonParagraphs.push(lines[i]);
+        nonParagraphs.push(currentLine);
         break;
       // We Don't Like These Very Much.
       case 'title':
@@ -200,36 +239,82 @@ function convertFileToHTML(content: TextContent[], path: string): Parsed[] {
   return elements;
 }
 
-function convertFileToPlainText(content: TextContent[], path: string): string {
+function convertToPlainText(content: TextContent[], path: string): string {
   let str = '';
-  const lines = processText(content, path);
+  const lines = makeMarkedLines(content, path);
 
   let isFirstPrintedLine = true;
+
   lines.forEach((line) => {
+    // we dont like these guys very much.
     if (['title', 'chapter', 'page number'].includes(line.item.kind)) return;
 
-    if (isFirstPrintedLine) isFirstPrintedLine = false;
-    else if (line.item.kind == 'indented') str += '\n    ';
-    else if (line.item.continuationOfPreviousLine == false) str += ' ';
-    else if (line.item.continuationOfPreviousLine == 'keep hyphen') str += '-';
+    const indented = line.item.kind == 'indented';
+    const continuation = line.item.continuationOfPreviousLine;
+    const [_, firstWord, afterFirstWord] = line.item.contents[0].str.match(/^([\w\p{P}]+) *(.*)/u) ?? [
+      null,
+      null,
+      null,
+    ];
+    const lineBreak = indented ? '\n    ' : '\n';
 
-    if (line.item.kind == 'big letter') {
-      // Join together the big letter and the next item even though they're separate blocks
-      str += line.item.contents[0].str;
-      str += line.item.contents
-        .slice(1)
-        .map((item) => item.str)
-        .reduce((p, n) => `${p} ${n}`);
-    } else if (line.item.kind == 'footnote') {
-      str += `\n${line.item.symbol}: ${line.item.note}`;
-    } else {
-      str += line.item.contents.map((item) => item.str).reduce((p, n) => `${p} ${n}`);
+    if (isFirstPrintedLine) {
+      isFirstPrintedLine = false;
+    } else if (firstWord != null && afterFirstWord != null) {
+      switch (continuation) {
+        case true:
+          // remove hyphen, if present
+          str = str.replace(/-$/, '');
+          str += firstWord + lineBreak;
+          line.item.contents[0].str = afterFirstWord;
+          break;
+        case 'keep hyphen':
+          str += '-' + firstWord + lineBreak;
+          line.item.contents[0].str = afterFirstWord;
+          break;
+        case false:
+          str += lineBreak;
+          break;
+      }
+    }
+
+    if (line.item.contents.at(0)?.str.length == 0) line.item.contents = line.item.contents.slice(1);
+    if (line.item.contents.length == 0) return;
+
+    switch (line.item.kind) {
+      case 'big letter':
+        // Join together the big letter and the next item even though they're separate blocks
+        str += line.item.contents[0].str;
+        // if (line.item.contents.slice(1).length == 0) {
+        //   console.error(`pg ${line.pageIndex} big letter ${line.item.contents[0].str}`);
+        // }
+
+        const afterBig = line.item.contents.slice(1).map((item) => item.str);
+        if (afterBig.length > 0) str += afterBig.reduce((p, n) => `${p} ${n}`);
+        break;
+
+      case 'list item':
+        const [_, listNumber] = line.item.number;
+
+        const listNumberStr = '' + listNumber;
+
+        str += ' '.repeat(5 - listNumberStr.length) + listNumberStr + '. ';
+        str += line.item.restOfLine;
+        break;
+
+      case 'footnote':
+        str += `\n\n${line.item.symbol}: ${line.item.note}`;
+        break;
+
+      case 'indented':
+      case 'title':
+      case 'normal':
+        str += line.item.contents.map((item) => item.str).reduce((p, n) => `${p} ${n}`);
+        break;
     }
   });
 
-  console.log(str);
-
-  return str;
+  return fixSpacingInFlattenedString(str);
 }
 
 function makeBody(source: MarkedLine & { pageIndex: number }, italicFontName: string): ParagraphBody {
@@ -264,8 +349,7 @@ function makeBody(source: MarkedLine & { pageIndex: number }, italicFontName: st
 
 function processParagraph(linesOfParagraph: BlockOf<MarkedLine>[], italicFontName: string): Parsed | undefined {
   if (linesOfParagraph.length == 1) {
-    const item = linesOfParagraph[0].item;
-    const { pageIndex } = linesOfParagraph[0];
+    const { pageIndex, item } = linesOfParagraph[0];
 
     switch (item.kind) {
       case 'chapter':
@@ -274,12 +358,17 @@ function processParagraph(linesOfParagraph: BlockOf<MarkedLine>[], italicFontNam
         return {
           kind: 'paragraph',
           bigLetter: item.contents[0].str,
+          indentLevel: 0,
           body: makeBody({ ...item, contents: item.contents.slice(1), pageIndex }, italicFontName),
         };
       case 'footnote':
         return { kind: 'footnote', symbol: item.symbol, text: item.note, pageIndex };
       case 'indented':
-        return { kind: 'paragraph', body: makeBody({ ...item, pageIndex }, italicFontName) };
+        return {
+          kind: 'paragraph',
+          indentLevel: item.indentLevel,
+          body: makeBody({ ...item, pageIndex }, italicFontName),
+        };
       case 'page number':
       case 'title':
       case 'normal':
@@ -299,12 +388,14 @@ function processParagraph(linesOfParagraph: BlockOf<MarkedLine>[], italicFontNam
     parsedParagraph = {
       kind: 'paragraph',
       bigLetter: firstItem.str,
+      indentLevel: 0,
       body: makeBody({ ...firstLine, pageIndex, contents: rest }, italicFontName),
     };
   } else if (firstLine.kind == 'indented') {
     const { pageIndex } = linesOfParagraph[0];
+    const { indentLevel } = firstLine;
 
-    parsedParagraph = { kind: 'paragraph', body: makeBody({ ...firstLine, pageIndex }, italicFontName) };
+    parsedParagraph = { kind: 'paragraph', indentLevel, body: makeBody({ ...firstLine, pageIndex }, italicFontName) };
   } else {
     console.error(`ERROR: unsupported kind ${firstLine.kind} in start of paragraph`);
     return undefined;
@@ -314,7 +405,7 @@ function processParagraph(linesOfParagraph: BlockOf<MarkedLine>[], italicFontNam
     const line = linesOfParagraph[i];
     const { pageIndex } = linesOfParagraph[i];
 
-    if (line.item.kind == 'normal') {
+    if (line.item.kind == 'normal' || line.item.kind == 'indented') {
       parsedParagraph.body = parsedParagraph.body.concat(makeBody({ ...line.item, pageIndex }, italicFontName));
     } else {
       console.error(`ERROR: unsupported kind ${line.item.kind} in non-start of paragraph`);
@@ -388,12 +479,15 @@ function getGraphicalLines(document: BlockOf<TextItem>[]): BlockOf<MarkedLine>[]
     // Big letters (The type that start a chapter) always begin a line, but have a lower y value than the line they begin
     const currentItemIsBigLetter = current.item.str.length == 1 && current.position.height > 20;
 
-    // if this is the last line, or the next item is after a line/page break
+    const currentBaseline = current.position.y + current.position.height;
+    const nextBaseline = next && next.position.y + next.position.height;
+
+    // if this is the last line, the end of a line, or the next item is after a line/page break
     if (
       !currentItemIsBigLetter &&
-      (next == undefined || next.position.y < current.position.y || next.pageIndex > current.pageIndex)
+      // @ts-expect-error  nextBaseline cannot be undefined, we checked if next is undefined, tsc just doesn't see the correlation
+      (next == undefined || Math.abs(currentBaseline - nextBaseline) > 1 || next.pageIndex > current.pageIndex)
     ) {
-      currentLine.item = markLine(currentLine.item);
       lines.push(currentLine);
       currentLine = undefined;
     }
@@ -402,10 +496,93 @@ function getGraphicalLines(document: BlockOf<TextItem>[]): BlockOf<MarkedLine>[]
   return lines;
 }
 
-const titles = ['ALCOHOLICS ANONYMOUS', 'THERE IS A SOLUTION'];
+const titles = [
+  'Alcoholics Anonymous',
+  'Title Page',
+  'Copyright Information',
+  'Preface',
+  'Foreword to First Edition',
+  'Foreword to Second Edition',
+  'Foreword to Third Edition',
+  'Foreword to Fourth Edition',
+  'The Doctors Opinion',
+  'Bill’s Story',
+  'There is a Solution',
+  'More About Alcoholism',
+  'We Agnostics',
+  'How It Works',
+  'Into Action',
+  'Working With Others',
+  'To Wives',
+  'The Family Afterward',
+  'To Employers',
+  'A Vision For You',
+  'Personal Stories',
+  'How Forty-Two Alcoholics Recovered From Their Malady',
+
+  'PART I',
+  'PIONEERS OF AA',
+  'ALCOHOLIC ANONYMOUS',
+  'NUMBER THREE',
+  'ALCOHOLIC ANONYMOUS NUMBER THREE',
+  'GRATITUDE IN ACTION',
+  'WOMEN SUFFER TOO',
+  'OUR SOUTHERN FRIEND',
+  'THE VICIOUS CYCLE',
+  'THE MAN WHO MASTERED FEAR',
+  'HE SOLD HIMSELF SHORT',
+  'THE KEYS OF THE KINGDOM',
+
+  'PART II',
+  'THEY STOPPED IN TIME',
+  'THE MISSING LINK',
+  'FEAR OF FEAR',
+  'THE HOUSEWIFE WHO DRANK',
+  'AT HOME',
+  'THE HOUSEWIFE WHO DRANK AT HOME',
+  'MY CHANCE TO LIVE',
+  'STUDENT OF LIFE',
+  'CROSSING THE RIVER OF DENIAL',
+  'IT MIGHT HAVE BEEN WORSE',
+  'TIGHTROPE',
+  'FLOODED WITH FEELING',
+  'WINNER TAKES ALL',
+  'THE PERPETUAL QUEST',
+  'ACCEPTANCE WAS THE ANSWER',
+  'WINDOW OF OPPORTUNITY',
+
+  'PART III',
+  'THEY LOST NEARLY ALL',
+  'AND ME',
+  'HE LIVED ONLY TO DRINK',
+  'SAFE HAVEN',
+  'LISTENING TO THE WIND',
+  'TWICE GIFTED',
+  'BUILDING A NEW LIFE',
+  'ON THE MOVE',
+  'A VISION OF RECOVERY',
+  'GUTTER BRAVADO',
+  'EMPTY ON THE INSIDE',
+  'GROUNDED',
+  'ANOTHER CHANCE',
+  'A LATE START',
+  'LATE START',
+  'FREEDOM FROM BONDAGE',
+  'AA TAUGHT HIM TO HANDLE',
+  'SOBRIETY',
+  'TO HANDLE SOBRIETY',
+
+  'The A.A. Tradition',
+  'Spiritual Experience',
+  'The Medical View On A.A.',
+  'The Lasker Award',
+  'The Religious View on A.A.',
+  'How to Get in Touch With A.A.',
+  'Twelve Concepts (Short Form)',
+].map((x) => x.toUpperCase());
 
 // Marks lines that continue a word from
-function markWordBreaks(lines: BlockOf<MarkedLine>[]) {
+function markBrokenWords(lines: BlockOf<MarkedLine>[]) {
   // We manually manage the "last" element instead of using lines.at(i - 1) so we can skip the
   // title and page numbers while preserving the last body line
   let last: BlockOf<MarkedLine> | undefined = undefined;
@@ -426,29 +603,36 @@ function markWordBreaks(lines: BlockOf<MarkedLine>[]) {
     const lastItemOfLast = last.item.contents[last.item.contents.length - 1];
 
     // Find the candidates for a word broken across lines
-    const firstWordInCurrentItem: string | undefined = firstItemOfCurrent.str.match(/^([\w\-]+)/)?.at(1);
+    const firstWordInCurrentItem: string | undefined = firstItemOfCurrent.str.match(/^([\w\-’]+)/u)?.at(1);
     const firstWordInCurrentItemIsWord: boolean =
       firstWordInCurrentItem != undefined && englishWords.check(firstWordInCurrentItem);
 
-    const lastWordInLastItem: string | undefined = lastItemOfLast.str.match(/\b(\w+)\W*$/)?.at(1);
+    const lastWordInLastItem: string | undefined = lastItemOfLast.str.match(/\b([\w’]+)[^\w’]*$/)?.at(1);
     const lastWordInLastItemIsWord: boolean = lastWordInLastItem != undefined && englishWords.check(lastWordInLastItem);
-    const hyphenBetween: boolean = last != undefined && /\b\w+-$/.test(lastItemOfLast.str);
+    const hyphenBetween: boolean = last != undefined && /-$/.test(lastItemOfLast.str);
+    const apostropheBetween: boolean = last != undefined && (lastItemOfLast.str + firstWordInCurrentItem).includes('’');
     // Remove hyphen if it exists, we will replace it later
     if (hyphenBetween)
       last.item.contents[last.item.contents.length - 1].str = last.item.contents[
         last.item.contents.length - 1
       ].str.slice(0, -1);
 
-    // If the last index of a space is -1, there is only one word, so the index is 0
     const wordSpanningAcrossLines: string | undefined =
       lastWordInLastItem && lastWordInLastItem + firstWordInCurrentItem;
     const wordSpanningAcrossLinesIsWord: boolean =
       wordSpanningAcrossLines != undefined && englishWords.check(wordSpanningAcrossLines.toLowerCase());
 
+    const wordSpanningAcrossLinesWithApostrophe: string | undefined =
+      lastWordInLastItem && (lastWordInLastItem + firstWordInCurrentItem).replace('’', "'");
+    const wordSpanningAcrossLinesWithApostropheIsWord: boolean =
+      wordSpanningAcrossLinesWithApostrophe != undefined &&
+      englishWords.check(wordSpanningAcrossLinesWithApostrophe.toLowerCase());
+
     const bothAreWords = lastWordInLastItemIsWord && firstWordInCurrentItemIsWord;
 
     const lineBrokeAHyphenatedWord = bothAreWords && hyphenBetween;
-    const lineBrokeANonHyphenatedWord = /* !bothAreWords && */ wordSpanningAcrossLinesIsWord;
+    const lineBrokeANonHyphenatedWord =
+      /* !bothAreWords && */ wordSpanningAcrossLinesIsWord || wordSpanningAcrossLinesWithApostropheIsWord;
     // commented out because it caused trouble with 'We' ('W' and 'e' are words i guess???)
 
     if (lineBrokeANonHyphenatedWord) {
@@ -465,7 +649,7 @@ function markWordBreaks(lines: BlockOf<MarkedLine>[]) {
 
 function isFootnoteSymbol(s: string) {
   const symbolList = ['*'];
-  return symbolList.includes(s);
+  return symbolList.find((symbol) => s.at(0) == symbol) !== undefined;
 }
 
 // Marks lines that contain or reference footnotes in place
@@ -477,8 +661,11 @@ function markFootnotes(lines: BlockOf<MarkedLine>[]) {
   pages.forEach((linesInPage) => {
     const footnoteSymbols = [];
 
-    // Iterate backwards until we hit a line that doesn't start with a symbol
-    for (let i = linesInPage.length - 1; i >= 0 && isFootnoteSymbol(linesInPage[i].item.contents[0].str); i--) {
+    for (let i = linesInPage.length - 1; i >= 0; i--) {
+      if (linesInPage[i].item.kind == 'page number') continue;
+
+      if (!isFootnoteSymbol(linesInPage[i].item.contents[0].str)) continue;
+
       const symbol = linesInPage[i].item.contents[0].str;
       const indexOverall = linesInPage[i].lineIndexOverall;
 
@@ -512,41 +699,39 @@ function markFootnotes(lines: BlockOf<MarkedLine>[]) {
   });
 }
 
-// Marks lines that begin paragraphs in place
-function markParagraphs(lines: BlockOf<MarkedLine>[]) {
+// Marks indented lines in place
+function markIndents(lines: BlockOf<MarkedLine>[]) {
   // We keep the original indices so we can modify the array in place
   const linesMarkedWithIndices = lines.map((line, lineIndexOverall) => ({ lineIndexOverall, ...line }));
 
   const pages = Map.groupBy(linesMarkedWithIndices, (line) => line.pageIndex);
   pages.forEach((pageLines) => {
     const linesMinusSkipped = pageLines.filter(({ item }) => item.kind == 'normal');
+    if (linesMinusSkipped.length == 0) return;
 
     // Coalesce lines on a page by the nearest quarter of an x value
     const linesGroupedByPosition = Map.groupBy(
-      linesMinusSkipped.map(({ position, lineIndexOverall }) => ({
+      linesMinusSkipped.map(({ position, lineIndexOverall }, indexOnPage) => ({
         x: Math.round(position.x * 4) / 4,
         lineIndexOverall,
+        indexOnPage,
       })),
       ({ x }) => x,
     );
-    const linesSortedByAscendingXValue = Array.from(linesGroupedByPosition).sort((a, b) => a[0] - b[0]);
-    const linesSortedByDescendingXFrequency = Array.from(linesGroupedByPosition).sort(
-      (a, b) => b[1].length - a[1].length,
-    );
 
-    // sanity check
-    if (linesSortedByAscendingXValue[0][0] != linesSortedByDescendingXFrequency[0][0]) {
-      console.log(
-        `ERROR: The leftmost X value was not the most frequent in '${lines[0].file}' (line ${linesSortedByAscendingXValue[0][1][0].lineIndexOverall} vs ${linesSortedByDescendingXFrequency[0][1][0].lineIndexOverall})`,
-      );
-      return [];
-    }
+    const linesSortedByAscendingXValue = Array.from(linesGroupedByPosition).sort((a, b) => a[0] - b[0]);
+    const baselineXValue = linesSortedByAscendingXValue[0][0];
 
     // skip the first entry with slice(1) because that's (likely) the baseline
-    linesSortedByAscendingXValue.slice(1).forEach(([, linesOnPage]) =>
+    linesSortedByAscendingXValue.slice(1).forEach(([xValue, linesOnPage]) =>
       linesOnPage.forEach(({ lineIndexOverall }) => {
         // There is often a "ghost indent" the line after a big letter, and big letters are never a singlet paragraph
-        if (lines.at(lineIndexOverall - 1)?.item.kind != 'big letter') lines[lineIndexOverall].item.kind = 'indented';
+        if (lines.at(lineIndexOverall - 1)?.item.kind != 'big letter')
+          lines[lineIndexOverall].item = {
+            ...lines[lineIndexOverall].item,
+            kind: 'indented',
+            indentLevel: (xValue - baselineXValue) / 12,
+          };
       }),
     );
   });
@@ -555,51 +740,173 @@ function markParagraphs(lines: BlockOf<MarkedLine>[]) {
 // Marks big letters, titles, chapters, and page numbers, but not paragraphs or footnotes.
 // Marks in place.
 function markLines(lines: BlockOf<MarkedLine>[]) {
-  for (let i = 0; i < lines.length; i++) lines[i].item = markLine(lines[i].item);
+  let context: MarkingContext = {
+    mostRecentListNumbers: [],
+    mostRecentListId: 0,
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const [marked, newContext] = markLine(lines[i].item, context);
+
+    lines[i].item = marked;
+    context = newContext;
+  }
 }
 
+type MarkingContext = {
+  mostRecentListNumbers: number[];
+  mostRecentListId: number;
+};
+
 // Marks big letters, titles, chapters, and page numbers, but not paragraphs
-function markLine(line: MarkedLine): MarkedLine {
+function markLine(line: MarkedLine, context: MarkingContext): [MarkedLine, MarkingContext] {
   const firstItem = line.contents.at(0);
   const lineInPlainText = line.contents
     .map((item) => item.str)
     .reduce((p, n) => `${p} ${n}`)
     .trim();
 
-  const titleMatches = lineInPlainText.match(/^[0-9]* *(?<title>(?:[A-Z]+ +)*[A-Z]+) *[0-9]*$/);
+  const titleMatches = lineInPlainText.match(/^[0-9]* *(?<title>(?:[A-Za-z’]+ +)*[A-Za-z’]+) *[0-9]*$/);
   const title = titleMatches?.groups?.title;
 
   const chapterMatches = lineInPlainText.match(/^Chapter +(?<chapter>[0-9]*)$/);
   const chapter = chapterMatches?.groups?.chapter;
 
-  const pageNumberMatches = lineInPlainText.match(/^(?<page>[0-9]*)$/);
+  const pageNumberMatches = lineInPlainText.match(/^(?<page>[ivx0-9]*)$/);
   const page = pageNumberMatches?.groups?.page;
 
+  const listMatches = lineInPlainText.match(
+    /^(?<listNumber>(?:^[ivxlc0-9]+|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b)[).—]+ *(?<afterListNumber>.*)$/iu,
+  );
+  const listNumberStr = listMatches?.groups?.listNumber;
+  const listNumber = parseIntOrRomanOrSpelledNumber(listNumberStr);
+  const restOfLine = listMatches?.groups?.afterListNumber;
+
+  const lastListNumber = context.mostRecentListNumbers.at(-1);
+  const lastListId = context.mostRecentListId;
+  let listId: number | undefined = undefined;
+
+  if (listNumber != undefined && page == undefined) {
+    if (lastListNumber == undefined || lastListNumber < listNumber) {
+      listId = context.mostRecentListId;
+      context.mostRecentListNumbers.push(listNumber);
+    } else {
+      listId = lastListId + 1;
+      context = { mostRecentListNumbers: [listNumber], mostRecentListId: listId };
+    }
+  }
+
+  let output: MarkedLine | null = null;
+
   if (firstItem != undefined && firstItem.height > 20)
-    return {
+    output = {
       ...line,
       kind: 'big letter',
     };
-  if (title && titles.includes(title))
-    return {
+  else if (title && titles.includes(title.toUpperCase()))
+    output = {
       ...line,
       kind: 'title',
       title,
     };
-  if (chapter)
-    return {
+  else if (chapter)
+    output = {
       ...line,
       kind: 'chapter',
       chapter: Number(chapter),
     };
-  if (page)
-    return {
+  else if (page)
+    output = {
       ...line,
       kind: 'page number',
       page: Number(page),
     };
-  // TODO: Rest
-  return line;
+  else if (listNumber !== undefined && listNumberStr !== undefined && restOfLine !== undefined && listId !== undefined)
+    output = {
+      ...line,
+      kind: 'list item',
+      number: [listNumberStr, listNumber],
+      listId,
+      restOfLine,
+    };
+  else
+    // TODO: Rest
+    output = line;
+
+  return [output, context];
+}
+
+function fixSpacingInFlattenedString(toFix: string): string {
+  const rightSpacePunctuation = '*)”’;:';
+  const leftSpacePunctuation = '“‘(';
+  const bothSpacePunctuation = '—';
+  const noSpacePunctuation = `'-`;
+
+  const allPunctuation = bothSpacePunctuation + rightSpacePunctuation + leftSpacePunctuation + noSpacePunctuation;
+
+  // why did they do this
+  toFix = toFix.replaceAll(/’’/g, '”');
+
+  // I do not care for the dots personally. style choice
+  toFix = toFix.replaceAll(/A\. *A\./g, 'AA');
+
+  // periods are handled separately because of acronyms and ellipses
+  toFix = toFix.replaceAll(/ *([^A-Z .]) *(\.) *(\p{P}?) *(\p{P}?) */gu, '$1$2$3$4 ');
+
+  // commas are handled separately because of comma-delimited numbers
+  // not comma-separated numbers:
+  toFix = toFix.replaceAll(
+    / *(?:(?<first>[^0-9 ]) *, *(?<second>[^0-9 ]))|(?:(?<first>[0-9]) *, *(?<second>[^0-9 ]))|(?:(?<first>[^0-9 ]) *, *(?<second>[0-9])) */g,
+    '$<first>, $<second>',
+  );
+  // TODO: there is a bug for any two numbers that are listed with a comma between them, like a date.
+  //    See the output for the footnote on the last page of Bill's story.
+  //
+  //    Really this is a sign that the way I'm doing this sucks, we have x positions and can and should
+  //    use them to determine spacing choices instead of doing this hacky bullshit
+  //
+  // comma-separated numbers:
+  toFix = toFix.replaceAll(/ *(?<first>[0-9]) *, *(?<second>[0-9]) */g, '$<first>,$<second>');
+
+  for (const punct of allPunctuation) {
+    const leftPad = (leftSpacePunctuation + bothSpacePunctuation).includes(punct) ? ' ' : '';
+    const rightPad = (rightSpacePunctuation + bothSpacePunctuation).includes(punct) ? ' ' : '';
+
+    const escape = '(*)'.includes(punct) ? '\\' : '';
+
+    // const regex = new RegExp(` *\\${punct} *(\\p{P}*) *`, 'gu');
+    const regex = new RegExp(` *${escape}${punct} *(?<morePunct>\\p{P}*) *`, 'gu');
+
+    toFix = toFix.replaceAll(regex, leftPad + punct + '$<morePunct>' + rightPad);
+  }
+
+  const spaceThenPunctStartingLine = new RegExp(`^ ([${allPunctuation}])`, 'gum');
+  toFix = toFix.replaceAll(spaceThenPunctStartingLine, '$1');
+  const punctThenSpaceEndingLine = new RegExp(`([${allPunctuation},.]) $`, 'gum');
+  toFix = toFix.replaceAll(punctThenSpaceEndingLine, '$1');
+
+  // right single quotes are handled again because they might be an apostrophe in the middle of a word. STUPID
+  toFix = toFix.replaceAll(/(\w+)’ (\w+)/gu, (match, firstWord, secondWord) => {
+    // const firstWord = match.groups?.firstWord;
+    // const secondWord = match.groups?.secondWord;
+    if (typeof firstWord !== 'string' || typeof secondWord !== 'string') {
+      console.error('Dafuq');
+      return match;
+    }
+
+    const isPossessive = englishWords.check(firstWord.toLowerCase()) && secondWord.toLowerCase() == 's';
+    const isContraction =
+      englishWords.check(`${firstWord.toLowerCase()}'${secondWord.toLowerCase()}`) ||
+      englishWords.check(`${firstWord}'${secondWord.toLowerCase()}`);
+
+    if (isPossessive || isContraction) {
+      return `${firstWord}'${secondWord}`;
+    } else {
+      return `${firstWord}’ ${secondWord}`;
+    }
+  });
+
+  return toFix;
 }
 
 main();

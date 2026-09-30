@@ -12,6 +12,8 @@ dist
 dist-ssr
 *.local
 
+web/books/big-book-pdfs/
+
 # Editor directories and files
 .vscode/
 !.vscode/extensions.json

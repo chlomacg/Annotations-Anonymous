@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "convert-book-to": "npx tsx books/scripts/toPlainText.tsx"
+    "convert-book-to": "npx tsx books/scripts/toPlainText.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

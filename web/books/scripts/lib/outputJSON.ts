@@ -17,6 +17,7 @@ export type Footnote = {
 export type Paragraph = {
   kind: 'paragraph';
   bigLetter?: string;
+  indentLevel: number;
   body: ParagraphBody;
 };
 

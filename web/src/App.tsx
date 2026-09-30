@@ -6,14 +6,18 @@ import { Button } from './components/ui/button';
 import { LoginDialog } from './components/LoginDialog';
 import { toast } from 'sonner';
 import { Editor } from './components/Editor';
+import ProfilePicture from './components/ProfilePicture';
 
 function App() {
   const {
-    data: session,
+    data: sessionData,
     isPending, //loading state
     error, //error object
     refetch, //refetch the session
   } = authClient.useSession();
+
+  const session = sessionData?.session;
+  const user = sessionData?.user;
 
   const [loginPrompted, setLoginPrompted] = useState(false);
   const [prompt, setPrompt] = useState({ message: '', description: '' });
@@ -55,10 +59,10 @@ function App() {
       )}
       <div className="py-4 divide-y-2 dark:divide-gray-400 w-90 md:w-130 flex flex-col">
         <div className="flex flex-row gap-2">
-          {session && <img src="/chloe.jpg" alt="A profile picture" className="w-9 h-9 rounded-full" />}
+          {user?.image && <ProfilePicture userImage={user.image} />}
           <EditorContext key={editorKey}>
             <Editor
-              session={session}
+              session={sessionData}
               resetEditor={resetEditor}
               promptLogin={() => {
                 setPrompt({
@@ -71,7 +75,16 @@ function App() {
             />
           </EditorContext>
         </div>
-        <Feed />
+        <Feed
+          promptLogin={() => {
+            setPrompt({
+              message: 'Please sign in to post',
+              description: 'Your post will be waiting for you',
+            });
+
+            setLoginPrompted(true);
+          }}
+        />
       </div>
     </div>
   );
