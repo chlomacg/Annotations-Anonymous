@@ -148,6 +148,8 @@ function makeMarkedLines(content: TextContent[], path: string): BlockOf<MarkedLi
       // .map((item) => ({ ...item, str: item.str.replaceAll('—', ' — ') }))
       .map((item, lineIndex) => ({ item, position: positionOf(item), file: path, pageIndex, lineIndex }))
       .sort((a, b) => {
+        // there are many lines that are just barely different y values but on the same line, so
+        // we use this heuristic.
         const closeEnough = Math.abs(a.position.y - b.position.y) < 0.5;
         // The origin is in the bottom-left of the page, so a lower y value means lower on the page.
         // We want to sort it top to bottom first.
