@@ -612,7 +612,6 @@ function markBrokenWords(lines: BlockOf<MarkedLine>[]) {
     const lastWordInLastItem: string | undefined = lastItemOfLast.str.match(/\b([\w’]+)[^\w’]*$/)?.at(1);
     const lastWordInLastItemIsWord: boolean = lastWordInLastItem != undefined && englishWords.check(lastWordInLastItem);
     const hyphenBetween: boolean = last != undefined && /-$/.test(lastItemOfLast.str);
-    const apostropheBetween: boolean = last != undefined && (lastItemOfLast.str + firstWordInCurrentItem).includes('’');
     // Remove hyphen if it exists, we will replace it later
     if (hyphenBetween)
       last.item.contents[last.item.contents.length - 1].str = last.item.contents[
