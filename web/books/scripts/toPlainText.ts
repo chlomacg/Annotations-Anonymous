@@ -113,7 +113,8 @@ type LineType =
   | LineKind.BigLetter
   | LineKind.PageNumber
   | LineKind.ListItem
-  | LineKind.Footnote;
+  | LineKind.Footnote
+  | LineKind.FootnoteReference;
 
 async function getTextFromPDF(path: string): Promise<TextContent[]> {
   const doc = await pdfjsLib.getDocument(path).promise;
@@ -211,6 +212,15 @@ function convertToHTML(content: TextContent[], path: string): Parsed[] {
         }
         paragraphs.at(-1)?.push(currentLine);
         break;
+
+      case 'footnote reference':
+        if (paragraphs.length == 0) {
+          console.error("Warning: trying to push to a paragraph, but one hasn't been started.");
+          console.error(currentLine.item.contents.map((item) => item.str));
+        }
+        paragraphs.at(-1)?.push(currentLine);
+        break;
+
       case 'chapter':
       case 'footnote':
         nonParagraphs.push(currentLine);
@@ -317,6 +327,11 @@ function convertToPlainText(content: TextContent[], path: string): string {
   });
 
   return fixSpacingInFlattenedString(str);
+}
+
+function isFootnoteSymbol(s: string): boolean {
+  const symbols = ['*'];
+  return symbols.includes(s);
 }
 
 function makeBody(source: MarkedLine & { pageIndex: number }, italicFontName: string): ParagraphBody {
@@ -648,9 +663,9 @@ function markBrokenWords(lines: BlockOf<MarkedLine>[]) {
   }
 }
 
-function isFootnoteSymbol(s: string) {
+function findFootnoteSymbol(s: string): string | undefined {
   const symbolList = ['*'];
-  return symbolList.find((symbol) => s.at(0) == symbol) !== undefined;
+  return symbolList.find((symbol) => s.at(0) == symbol);
 }
 
 // Marks lines that contain or reference footnotes in place
@@ -660,43 +675,67 @@ function markFootnotes(lines: BlockOf<MarkedLine>[]) {
 
   const pages = Map.groupBy(linesMarkedWithIndices, (line) => line.pageIndex);
   pages.forEach((linesInPage) => {
-    const footnoteSymbols = [];
+    const footnotes: { footnote: LineKind.Footnote; lineIndex: number }[] = [];
 
     for (let i = linesInPage.length - 1; i >= 0; i--) {
       if (linesInPage[i].item.kind == 'page number') continue;
 
-      if (!isFootnoteSymbol(linesInPage[i].item.contents[0].str)) continue;
+      const firstItemInLine = linesInPage[i].item.contents[0];
+      const foundSymbol = findFootnoteSymbol(firstItemInLine.str);
+      if (foundSymbol == undefined || footnotes.some(({ footnote }) => foundSymbol == footnote.symbol)) continue;
 
-      const symbol = linesInPage[i].item.contents[0].str;
       const indexOverall = linesInPage[i].lineIndexOverall;
 
-      footnoteSymbols.push(symbol);
-      // Mark the line as a footnote
-      lines[indexOverall].item = {
-        ...lines[indexOverall].item,
+      const footnote: LineKind.Footnote = {
         kind: 'footnote',
-        symbol,
+        symbol: foundSymbol,
         note: linesInPage[i].item.contents
           .slice(1)
           .map((item) => item.str)
           .join(' '),
+        referencedBy: [],
+      };
+
+      footnotes.push({ footnote, lineIndex: indexOverall });
+      // Mark the line as a footnote
+      lines[indexOverall].item = {
+        ...lines[indexOverall].item,
+        ...footnote,
       };
     }
 
-    // Mark the references
-    for (const symbol in footnoteSymbols) {
-      const foundSymbols = linesInPage
-        .flatMap(({ item, lineIndexOverall }) =>
-          item.contents.map((textItem, indexInLine) => ({ lineIndexOverall, indexInLine, ...textItem })),
-        )
-        .filter(({ str }) => str == symbol);
+    // Link the references to the notes
+    footnotes.forEach(({ footnote, lineIndex: footnoteLineIndex }) => {
+      const { symbol } = footnote;
+      linesMarkedWithIndices
+        .slice(0, footnoteLineIndex)
+        .flatMap(({ item, lineIndexOverall: i }) => item.contents.map(({ str }) => ({ str, i })))
+        .filter(({ str }) => str == symbol)
+        .forEach(({ i }) => {
+          const reference: LineKind.FootnoteReference = {
+            kind: 'footnote reference',
+            symbol,
+            referencedNote: footnote,
+          };
 
-      // Mark every reference to each footnote (could be > 1)
-      for (let i = 0; i < foundSymbols.length; i++) {
-        const symbol = foundSymbols[i];
-        lines[symbol.lineIndexOverall].item.contents[symbol.indexInLine].symbol = symbol.str;
-      }
-    }
+          if (lines[i] == undefined) {
+            console.error('HELP: i: ' + i + ' and length: ' + lines.length);
+          }
+
+          // reference -> note
+          lines[i].item = {
+            ...lines[i].item,
+            ...reference,
+          };
+
+          // note -> reference
+          if (lines[footnoteLineIndex].item.kind === 'footnote') {
+            lines[footnoteLineIndex].item.referencedBy.push(reference);
+          } else {
+            console.error('ERROR: referenced line by footnote reference is not a footnote');
+          }
+        });
+    });
   });
 }
 
@@ -857,7 +896,7 @@ function fixSpacingInFlattenedString(toFix: string): string {
   // commas are handled separately because of comma-delimited numbers
   // not comma-separated numbers:
   toFix = toFix.replaceAll(
-    / *(?:(?<first>[^0-9 ]) *, *(?<second>[^0-9 ]))|(?:(?<first>[0-9]) *, *(?<second>[^0-9 ]))|(?:(?<first>[^0-9 ]) *, *(?<second>[0-9])) */g,
+    / *(?:(?<first>[^0-9 ]) *, *(?<second>[^0-9 ]))|(?:(?<first>[0-9]) *, *(?<second>[^0-9% ]))|(?:(?<first>[^0-9 ]) *, *(?<second>[0-9])) */g,
     '$<first>, $<second>',
   );
   // TODO: there is a bug for any two numbers that are listed with a comma between them, like a date.
