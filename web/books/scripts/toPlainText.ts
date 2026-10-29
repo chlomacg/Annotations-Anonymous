@@ -94,14 +94,9 @@ type Position = {
 };
 
 type MarkedLine = {
-  contents: (TextItem & FootnoteInfo)[];
+  contents: TextItem[];
   continuationOfPreviousLine: boolean | 'keep hyphen';
 } & LineType;
-
-// Marks the symbol in the body that alerts the reader to read the footnote
-type FootnoteInfo = {
-  symbol?: string;
-};
 
 import type * as LineKind from './lib/lineKind.ts';
 
@@ -113,8 +108,7 @@ type LineType =
   | LineKind.BigLetter
   | LineKind.PageNumber
   | LineKind.ListItem
-  | LineKind.Footnote
-  | LineKind.FootnoteReference;
+  | LineKind.Footnote;
 
 async function getTextFromPDF(path: string): Promise<TextContent[]> {
   const doc = await pdfjsLib.getDocument(path).promise;
@@ -164,311 +158,341 @@ function makeMarkedLines(content: TextContent[], path: string): BlockOf<MarkedLi
 
   const lines = getGraphicalLines(textItems);
 
+  markBrokenWords(lines);
   markLines(lines);
   markIndents(lines);
-  markBrokenWords(lines);
   markFootnotes(lines);
 
   return lines;
 }
 
-import type { BodyText, Paragraph, ParagraphBody, ParagraphBodyItem, Parsed } from './lib/outputJSON.ts';
+import {
+  plainStyle,
+  type Footnote,
+  type ParagraphBody,
+  type ParagraphBodyItem,
+  type Parsed,
+} from './lib/parsedText.ts';
 import { parseIntOrRomanOrSpelledNumber } from './lib/parseInt.ts';
 
 function convertToHTML(content: TextContent[], path: string): Parsed[] {
+  return []; // TODO: rewrite
+}
+
+function convertToPlainText(content: TextContent[], path: string): string {
   const lines = makeMarkedLines(content, path);
 
-  const paragraphs: BlockOf<MarkedLine>[][] = [];
-  // Non-paragraph elements that interrupt a paragraph go after it
-  // (there's no reason to be tied down to the current layout!)
-  let nonParagraphs: BlockOf<MarkedLine>[] = [];
+  const parsed = parseMarkedLines(lines);
 
-  for (let i = 0; i < lines.length; i++) {
-    const currentLine = lines[i];
-    switch (currentLine.item.kind) {
-      case 'big letter':
-        for (let i = 0; i < nonParagraphs.length; i++) paragraphs.push([nonParagraphs[i]]);
-        nonParagraphs = [];
-        paragraphs.push([currentLine]);
-        break;
-      case 'indented':
-        const startOfLastParagraph = paragraphs.at(paragraphs.length - 1)?.at(0)?.item;
-        const lastIndentLevel = startOfLastParagraph?.kind == 'indented' && startOfLastParagraph.indentLevel;
-        const currentIndentLevel = currentLine.item.indentLevel;
+  return parsed
+    .map((p) => {
+      switch (p.kind) {
+        case 'chapter':
+          return '\n\n\n' + p.text;
+        case 'title':
+          return '\n\n' + p.text + '\n\n';
+        case 'footnote':
+          return (
+            `\n\n\n${p.symbol}: ` +
+            p.body
+              .map((ps) => {
+                switch (ps.kind) {
+                  case 'text':
+                    return ps.text;
+                  case 'footnote reference':
+                    return ps.symbol;
+                }
+              })
+              .join(' ') +
+            '\n\n\n\n'
+          );
+        case 'paragraph':
+          const bigLetter = p.bigLetter ?? '';
+          const body = p.body
+            .map((ps) => {
+              switch (ps.kind) {
+                case 'text':
+                  return ps.text;
+                case 'footnote reference':
+                  return ps.symbol;
+              }
+            })
+            .join(' ');
+          const [, firstWord] = body.match(/^([\w\p{P}]+) /u) ?? [, ''];
+          const firstTotal = bigLetter + firstWord;
+          const space =
+            !bigLetter || !firstWord || englishWords.check(firstTotal.toLowerCase()) || englishWords.check(firstTotal)
+              ? ''
+              : ' ';
 
-        if (lastIndentLevel == currentIndentLevel) {
-          paragraphs[paragraphs.length - 1].push(currentLine);
-        } else {
-          for (let i = 0; i < nonParagraphs.length; i++) paragraphs.push([nonParagraphs[i]]);
-          paragraphs.push([currentLine]);
-        }
+          return '\t' + bigLetter + space + body;
+        case 'list':
+          return p.items
+            .map(
+              (item, i) =>
+                `${i + 1}. ` +
+                item
+                  .map((ps) => {
+                    switch (ps.kind) {
+                      case 'text':
+                        return ps.text;
+                      case 'footnote reference':
+                        return ps.symbol;
+                    }
+                  })
+                  .join(' '),
+            )
+            .join(' ');
+      }
+    })
+    .join('\n');
+}
 
-        break;
+// lets not print the title of the book randomly
+// 'To wives' in the title has an asterisk, so print that one but not the subsequent page headers
+const printedTitles: string[] = ['ALCOHOLICS ANONYMOUS', 'TO WIVES'];
 
-      case 'normal':
-        if (paragraphs.length == 0) {
-          console.error("Warning: trying to push to a paragraph, but one hasn't been started.");
-          console.error(currentLine.item.contents.map((item) => item.str));
-        }
-        paragraphs.at(-1)?.push(currentLine);
-        break;
-
-      case 'footnote reference':
-        if (paragraphs.length == 0) {
-          console.error("Warning: trying to push to a paragraph, but one hasn't been started.");
-          console.error(currentLine.item.contents.map((item) => item.str));
-        }
-        paragraphs.at(-1)?.push(currentLine);
-        break;
-
-      case 'chapter':
-      case 'footnote':
-        nonParagraphs.push(currentLine);
-        break;
-      // We Don't Like These Very Much.
-      case 'title':
-      case 'page number':
-    }
-  }
-
+function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
   const fontNames = Map.groupBy(
-    paragraphs.flatMap((p) => p.flatMap(({ item }) => item.contents.map(({ str, fontName }) => ({ str, fontName })))),
+    lines.flatMap(({ item }) => item.contents.map(({ str, fontName }) => ({ str, fontName }))),
     ({ fontName }) => fontName,
   );
 
   let italicFontName: string | undefined;
-  fontNames.forEach((strs) => {
-    if (strs[0].str.startsWith('Chapter')) italicFontName = strs[0].fontName;
+  fontNames.forEach(([{ str, fontName }]) => {
+    if (str.startsWith('Chapter')) italicFontName = fontName;
   });
 
-  const elements: Parsed[] = [];
+  type Context = {
+    lineLastSeen?: BlockOf<MarkedLine>;
+    blockCurrentlyIn?: Exclude<Parsed, Footnote>; // Usually gonna be a paragraph, could be a list
+    footnoteCurrentlyIn?: Footnote; // footnotes often interrupt paragraphs
+  };
+  const context: Context = {};
 
-  for (let i = 0; i < paragraphs.length; i++) {
-    const element = processParagraph(paragraphs[i], italicFontName!);
-    if (element != undefined) elements.push(element);
-  }
-
-  return elements;
-}
-
-function convertToPlainText(content: TextContent[], path: string): string {
-  let str = '';
-  const lines = makeMarkedLines(content, path);
-
-  let isFirstPrintedLine = true;
+  const parsed: Parsed[] = [];
 
   lines.forEach((line) => {
     // we dont like these guys very much.
-    if (['title', 'chapter', 'page number'].includes(line.item.kind)) return;
+    if (['page number'].includes(line.item.kind)) return;
 
-    const indented = line.item.kind == 'indented';
-    const continuation = line.item.continuationOfPreviousLine;
-    const [_, firstWord, afterFirstWord] = line.item.contents[0].str.match(/^([\w\p{P}]+) *(.*)/u) ?? [
-      null,
-      null,
-      null,
-    ];
-    const lineBreak = indented ? '\n    ' : '\n';
+    while (line.item.contents.at(0)?.str.length == 0) line.item.contents = line.item.contents.slice(1);
+    if (line.item.contents.length == 0) return;
 
-    if (isFirstPrintedLine) {
-      isFirstPrintedLine = false;
-    } else if (firstWord != null && afterFirstWord != null) {
-      switch (continuation) {
-        case true:
-          // remove hyphen, if present
-          str = str.replace(/-$/, '');
-          str += firstWord + lineBreak;
-          line.item.contents[0].str = afterFirstWord;
-          break;
-        case 'keep hyphen':
-          str += '-' + firstWord + lineBreak;
-          line.item.contents[0].str = afterFirstWord;
-          break;
-        case false:
-          str += lineBreak;
-          break;
+    const currentKind = context.blockCurrentlyIn?.kind;
+
+    const pushLastBlock: boolean =
+      ['big letter', 'indented', 'chapter'].includes(line.item.kind) ||
+      (line.item.kind === 'list item' && currentKind !== 'list') ||
+      (currentKind === 'list' && line.item.kind !== 'list item' && line.item.kind !== 'normal') ||
+      (line.item.kind === 'normal' &&
+        currentKind !== 'paragraph' &&
+        currentKind !== 'list' &&
+        !context.footnoteCurrentlyIn);
+
+    if (pushLastBlock && context.blockCurrentlyIn !== undefined) {
+      parsed.push(context.blockCurrentlyIn);
+      if (context.footnoteCurrentlyIn && context.footnoteCurrentlyIn.pageIndex !== line.pageIndex) {
+        parsed.push(context.footnoteCurrentlyIn);
+        context.footnoteCurrentlyIn = undefined;
       }
     }
 
-    if (line.item.contents.at(0)?.str.length == 0) line.item.contents = line.item.contents.slice(1);
-    if (line.item.contents.length == 0) return;
-
     switch (line.item.kind) {
       case 'big letter':
-        // Join together the big letter and the next item even though they're separate blocks
-        str += line.item.contents[0].str;
-        // if (line.item.contents.slice(1).length == 0) {
-        //   console.error(`pg ${line.pageIndex} big letter ${line.item.contents[0].str}`);
-        // }
+        const afterBig = line.item.contents.slice(1);
+        const body = flattenLine(afterBig, line.pageIndex, italicFontName!);
+        // TODO: add indent level detection
+        context.blockCurrentlyIn = {
+          kind: 'paragraph',
+          bigLetter: line.item.contents[0].str,
+          indentLevel: 1,
+          body,
+        };
 
-        const afterBig = line.item.contents.slice(1).map((item) => item.str);
-        if (afterBig.length > 0) str += afterBig.reduce((p, n) => `${p} ${n}`);
         break;
 
       case 'list item':
-        const [_, listNumber] = line.item.number;
+        if (context.blockCurrentlyIn?.kind !== 'list') context.blockCurrentlyIn = { kind: 'list', items: [] };
 
-        const listNumberStr = '' + listNumber;
+        if (line.item.continuationOfPreviousLine && context.blockCurrentlyIn.items.length > 0) {
+          const lastItem = context.blockCurrentlyIn.items.pop()!;
+          const lastInLastItem = lastItem.pop()!;
 
-        str += ' '.repeat(5 - listNumberStr.length) + listNumberStr + '. ';
-        str += line.item.restOfLine;
+          lastItem.push(...joinLines(lastInLastItem, line, italicFontName!));
+          context.blockCurrentlyIn.items.push(lastItem);
+        } else if (line.item.continuationOfPreviousLine && context.blockCurrentlyIn.items.length == 0) {
+          console.error(
+            `WARNING: Context empty in file ${line.file}, page ${line.pageIndex} but the following line is continuing a previous line:`,
+          );
+          console.error(
+            `${flattenLine(line.item.contents, line.pageIndex, italicFontName!).map((v) => (v.kind == 'text' ? v.text : v.symbol))}`,
+          );
+          console.error('Skipping this line during parsing.');
+        } else {
+          context.blockCurrentlyIn.items.push([
+            {
+              kind: 'text',
+              text: line.item.restOfLine,
+              style: { italicized: false },
+            },
+          ]);
+        }
         break;
 
+      // If a footnote interrupts a paragraph, it cuts it off curently, TODO: fix
       case 'footnote':
-        str += `\n\n${line.item.symbol}: ${line.item.note}`;
+        context.footnoteCurrentlyIn = {
+          kind: 'footnote',
+          symbol: line.item.symbol,
+          pageIndex: line.pageIndex,
+          body: flattenLine(line.item.contents.slice(1), line.pageIndex, italicFontName!),
+        };
+        break;
+      case 'chapter':
+        parsed.push({ kind: 'chapter', text: `Chapter ${line.item.chapter}` });
+        break;
+      case 'title':
+        const currentTitle = line.item.contents.map(({ str }) => str).reduce((p, n) => `${p} ${n}`);
+        const alreadyPrinted = printedTitles.includes(currentTitle);
+        if (!alreadyPrinted) {
+          parsed.push({
+            kind: 'title',
+            text: normalizeText(currentTitle),
+          });
+          printedTitles.push(currentTitle);
+        }
         break;
 
       case 'indented':
-      case 'title':
+        context.blockCurrentlyIn = {
+          kind: 'paragraph',
+          indentLevel: 1,
+          body: [...flattenLine(line.item.contents, line.pageIndex, italicFontName!)],
+        };
+        break;
       case 'normal':
-        str += line.item.contents.map((item) => item.str).reduce((p, n) => `${p} ${n}`);
+        const currBlock = context.blockCurrentlyIn;
+        const currFootnote = context.footnoteCurrentlyIn;
+
+        if (currFootnote !== undefined && currFootnote.pageIndex == line.pageIndex) {
+          const lastItem = currFootnote.body.pop()!;
+
+          currFootnote.body.push(...joinLines(lastItem, line, italicFontName!));
+        } else if (currBlock?.kind == 'paragraph') {
+          if (currBlock.body.at(-1)?.kind == 'text') {
+            const lastItem = currBlock.body.pop()!;
+
+            currBlock.body.push(...joinLines(lastItem, line, italicFontName!));
+          } else {
+            currBlock.body.push(...flattenLine(line.item.contents, line.pageIndex, italicFontName!));
+          }
+        } else if (currBlock?.kind == 'list' && currBlock.items.at(-1)?.at(-1)?.kind == 'text') {
+          const lastItemofLastItem = currBlock.items.at(-1)!.pop()!;
+
+          currBlock.items.at(-1)!.push(...joinLines(lastItemofLastItem, line, italicFontName!));
+        } else {
+          console.error(
+            `ERROR during parsing: blockKind = ${context.blockCurrentlyIn?.kind}, line: ${JSON.stringify(line, null, 2)}`,
+          );
+        }
         break;
     }
+    context.lineLastSeen = line;
   });
 
-  return fixSpacingInFlattenedString(str);
+  if (context.blockCurrentlyIn) parsed.push(context.blockCurrentlyIn);
+  if (context.footnoteCurrentlyIn) parsed.push(context.footnoteCurrentlyIn);
+
+  return parsed;
 }
 
-function isFootnoteSymbol(s: string): boolean {
-  const symbols = ['*'];
-  return symbols.includes(s);
-}
+function joinLines(
+  lastItem: ParagraphBodyItem,
+  nextLine: BlockOf<MarkedLine>,
+  italicFontName: string,
+): ParagraphBodyItem[] {
+  const nextFlattened = flattenLine(nextLine.item.contents, nextLine.pageIndex, italicFontName!);
+  const firstOfNextItalicized = nextFlattened[0].kind == 'text' && nextFlattened[0].style.italicized;
 
-function makeBody(source: MarkedLine & { pageIndex: number }, italicFontName: string): ParagraphBody {
-  const body: ParagraphBody = [];
+  if (lastItem.kind !== 'text' || lastItem.style.italicized !== firstOfNextItalicized)
+    return [lastItem, ...nextFlattened];
 
-  for (let i = 0; i < source.contents.length; i++) {
-    const currentItem = source.contents[i];
-    const lastItemAppended = body.at(body.length - 1);
+  let { text } = lastItem;
 
-    const currentStyle = { italicized: currentItem.fontName == italicFontName };
-    const currentIsFootnoteReference = isFootnoteSymbol(currentItem.str);
+  const indented = nextLine.item.kind == 'indented';
+  if (indented) console.error('WARNING: Joining a line with a line that begins a new paragraph?');
+  const continuation = nextLine.item.continuationOfPreviousLine;
 
-    if (
-      lastItemAppended == undefined ||
-      (lastItemAppended?.kind == 'text' && lastItemAppended.style.italicized != currentStyle.italicized)
-    ) {
-      body.push({
-        kind: 'text',
-        text: currentItem.str,
-        continuationOfPreviousItem: source.continuationOfPreviousLine,
-        style: currentStyle,
-      });
-    } else if (lastItemAppended.kind == 'text' && !currentIsFootnoteReference) {
-      body[body.length - 1] = { ...lastItemAppended, text: lastItemAppended.text + ' ' + currentItem.str };
-    } else if (currentIsFootnoteReference) {
-      body.push({ kind: 'footnote reference', symbol: currentItem.str, pageOfReferencedFootnote: source.pageIndex });
-    }
-  }
+  const firstElement = nextFlattened.at(0);
+  const afterFirstElement = nextFlattened.slice(1);
 
-  return body;
-}
+  const [, firstWord, afterFirstWord] = firstElement?.['text' as keyof ParagraphBodyItem].match(
+    /^([\w\p{P}]+) *(.*)/u,
+  ) ?? ['', '', ''];
 
-function processParagraph(linesOfParagraph: BlockOf<MarkedLine>[], italicFontName: string): Parsed | undefined {
-  if (linesOfParagraph.length == 1) {
-    const { pageIndex, item } = linesOfParagraph[0];
-
-    switch (item.kind) {
-      case 'chapter':
-        return { kind: 'chapter', text: `Chapter ${item.chapter}` };
-      case 'big letter':
-        return {
-          kind: 'paragraph',
-          bigLetter: item.contents[0].str,
-          indentLevel: 0,
-          body: makeBody({ ...item, contents: item.contents.slice(1), pageIndex }, italicFontName),
-        };
-      case 'footnote':
-        return { kind: 'footnote', symbol: item.symbol, text: item.note, pageIndex };
-      case 'indented':
-        return {
-          kind: 'paragraph',
-          indentLevel: item.indentLevel,
-          body: makeBody({ ...item, pageIndex }, italicFontName),
-        };
-      case 'page number':
-      case 'title':
-      case 'normal':
-        console.error(`ERROR: unsupported kind ${item.kind} in singlet paragraph`);
-        return undefined;
-    }
-  }
-
-  let parsedParagraph: Paragraph;
-
-  // Take care of the first line separately since it's the only one that might be a big letter
-  const firstLine = linesOfParagraph[0].item;
-  if (firstLine.kind == 'big letter') {
-    const [firstItem, ...rest] = firstLine.contents;
-    const { pageIndex } = linesOfParagraph[0];
-
-    parsedParagraph = {
-      kind: 'paragraph',
-      bigLetter: firstItem.str,
-      indentLevel: 0,
-      body: makeBody({ ...firstLine, pageIndex, contents: rest }, italicFontName),
-    };
-  } else if (firstLine.kind == 'indented') {
-    const { pageIndex } = linesOfParagraph[0];
-    const { indentLevel } = firstLine;
-
-    parsedParagraph = { kind: 'paragraph', indentLevel, body: makeBody({ ...firstLine, pageIndex }, italicFontName) };
-  } else {
-    console.error(`ERROR: unsupported kind ${firstLine.kind} in start of paragraph`);
-    return undefined;
-  }
-
-  for (let i = 1; i < linesOfParagraph.length; i++) {
-    const line = linesOfParagraph[i];
-    const { pageIndex } = linesOfParagraph[i];
-
-    if (line.item.kind == 'normal' || line.item.kind == 'indented') {
-      parsedParagraph.body = parsedParagraph.body.concat(makeBody({ ...line.item, pageIndex }, italicFontName));
-    } else {
-      console.error(`ERROR: unsupported kind ${line.item.kind} in non-start of paragraph`);
-      return undefined;
-    }
-  }
-
-  return mergeTextItems(parsedParagraph);
-}
-
-function mergeTextItems(paragraph: Paragraph): Paragraph {
-  const body: ParagraphBody = [];
-
-  for (let i = 0; i < paragraph.body.length; i++) {
-    const curr: ParagraphBodyItem = paragraph.body[i];
-    const prev: ParagraphBodyItem | undefined = body.at(body.length - 1);
-
-    if (!prev || prev.kind != 'text' || curr.kind != 'text' || prev.style.italicized != curr.style.italicized) {
-      body.push(curr);
-    } else {
-      body[body.length - 1] = { ...prev, text: mergeWords(prev, curr) };
-    }
-  }
-
-  return {
-    ...paragraph,
-    body,
-  };
-}
-
-function mergeWords(before: BodyText, after: BodyText): string {
-  const continued = after.continuationOfPreviousItem;
-  let deliminator;
-  switch (continued) {
-    case 'keep hyphen':
-      deliminator = '-';
-      break;
+  switch (continuation) {
     case true:
-      deliminator = '';
+      // remove hyphen, if present
+      text = text.replace(/-$/, '');
+      break;
+    case 'keep hyphen':
+      text += '-';
       break;
     case false:
-      deliminator = ' ';
+      if (text.length > 0) text += ' ';
       break;
   }
 
-  return `${before.text}${deliminator}${after.text}`;
+  const space = firstWord && afterFirstWord ? ' ' : '';
+  text += firstWord + space + afterFirstWord;
+
+  const style = { italicized: firstOfNextItalicized };
+  return [{ kind: 'text', text, style }, ...afterFirstElement];
+}
+
+function flattenLine(line: TextItem[], pageNumber: number, italicFontName: string): ParagraphBody {
+  let last: TextItem | undefined = undefined;
+  const flattened: ParagraphBodyItem[] = [];
+  for (let i = 0; i < line.length; i++) {
+    const { x } = positionOf(line[i]);
+    const lastPosition = last && positionOf(last);
+
+    const spaceBeforeCurrent = lastPosition ? x - lastPosition.x - lastPosition.width : 0;
+
+    const spaceToAdd = spaceBeforeCurrent > 2 ? ' ' : '';
+
+    if (isFootnoteSymbol(line[i].str)) {
+      flattened.push({ kind: 'footnote reference', symbol: line[i].str, pageOfReferencedFootnote: pageNumber });
+    } else {
+      const lastFlattened = flattened.at(-1);
+      const addLastStr = lastFlattened !== undefined && lastFlattened.kind === 'text';
+
+      if (addLastStr) flattened.pop();
+      const merged = addLastStr ? lastFlattened.text + spaceToAdd + line[i].str : line[i].str;
+
+      // emdashes are often in the middle of TextItems, so we do this hacky nonsense
+      const text = normalizeText(merged);
+
+      const style = line[i].fontName == italicFontName ? { italicized: true } : plainStyle;
+
+      flattened.push({
+        kind: 'text',
+        text,
+        style,
+      });
+    }
+
+    last = line[i];
+  }
+
+  return flattened;
+}
+
+const footnoteSymbols = ['*'];
+
+function isFootnoteSymbol(s: string): boolean {
+  return footnoteSymbols.includes(s);
 }
 
 // Returns an array of the lines that are graphically represented. The lines do not
@@ -539,6 +563,7 @@ const titles = [
 
   'PART I',
   'PIONEERS OF AA',
+  'DOCTOR BOB’S NIGHTMARE',
   'ALCOHOLIC ANONYMOUS',
   'NUMBER THREE',
   'ALCOHOLIC ANONYMOUS NUMBER THREE',
@@ -598,7 +623,7 @@ const titles = [
   'Twelve Concepts (Short Form)',
 ].map((x) => x.toUpperCase());
 
-// Marks lines that continue a word from
+// Marks lines that continue a word from a previous line
 function markBrokenWords(lines: BlockOf<MarkedLine>[]) {
   // We manually manage the "last" element instead of using lines.at(i - 1) so we can skip the
   // title and page numbers while preserving the last body line
@@ -633,23 +658,32 @@ function markBrokenWords(lines: BlockOf<MarkedLine>[]) {
         last.item.contents.length - 1
       ].str.slice(0, -1);
 
+    const wordsNotInDictionary = ['Plattsburg'];
+
     const wordSpanningAcrossLines: string | undefined =
       lastWordInLastItem && lastWordInLastItem + firstWordInCurrentItem;
     const wordSpanningAcrossLinesIsWord: boolean =
-      wordSpanningAcrossLines != undefined && englishWords.check(wordSpanningAcrossLines.toLowerCase());
+      wordSpanningAcrossLines != undefined &&
+      (wordsNotInDictionary.includes(wordSpanningAcrossLines) ||
+        englishWords.check(wordSpanningAcrossLines) ||
+        englishWords.check(wordSpanningAcrossLines.toLowerCase()));
 
     const wordSpanningAcrossLinesWithApostrophe: string | undefined =
       lastWordInLastItem && (lastWordInLastItem + firstWordInCurrentItem).replace('’', "'");
+    const wordSpanningAcrossLinesWithoutPossessive: string | undefined =
+      wordSpanningAcrossLinesWithApostrophe?.endsWith("'s")
+        ? wordSpanningAcrossLinesWithApostrophe.slice(0, -2)
+        : undefined;
     const wordSpanningAcrossLinesWithApostropheIsWord: boolean =
-      wordSpanningAcrossLinesWithApostrophe != undefined &&
-      englishWords.check(wordSpanningAcrossLinesWithApostrophe.toLowerCase());
+      (wordSpanningAcrossLinesWithApostrophe != undefined &&
+        englishWords.check(wordSpanningAcrossLinesWithApostrophe.toLowerCase())) ||
+      (wordSpanningAcrossLinesWithoutPossessive != undefined &&
+        englishWords.check(wordSpanningAcrossLinesWithoutPossessive));
 
     const bothAreWords = lastWordInLastItemIsWord && firstWordInCurrentItemIsWord;
 
     const lineBrokeAHyphenatedWord = bothAreWords && hyphenBetween;
-    const lineBrokeANonHyphenatedWord =
-      /* !bothAreWords && */ wordSpanningAcrossLinesIsWord || wordSpanningAcrossLinesWithApostropheIsWord;
-    // commented out because it caused trouble with 'We' ('W' and 'e' are words i guess???)
+    const lineBrokeANonHyphenatedWord = wordSpanningAcrossLinesIsWord || wordSpanningAcrossLinesWithApostropheIsWord;
 
     if (lineBrokeANonHyphenatedWord) {
       lines[i].item.continuationOfPreviousLine = true;
@@ -689,11 +723,6 @@ function markFootnotes(lines: BlockOf<MarkedLine>[]) {
       const footnote: LineKind.Footnote = {
         kind: 'footnote',
         symbol: foundSymbol,
-        note: linesInPage[i].item.contents
-          .slice(1)
-          .map((item) => item.str)
-          .join(' '),
-        referencedBy: [],
       };
 
       footnotes.push({ footnote, lineIndex: indexOverall });
@@ -703,39 +732,6 @@ function markFootnotes(lines: BlockOf<MarkedLine>[]) {
         ...footnote,
       };
     }
-
-    // Link the references to the notes
-    footnotes.forEach(({ footnote, lineIndex: footnoteLineIndex }) => {
-      const { symbol } = footnote;
-      linesMarkedWithIndices
-        .slice(0, footnoteLineIndex)
-        .flatMap(({ item, lineIndexOverall: i }) => item.contents.map(({ str }) => ({ str, i })))
-        .filter(({ str }) => str == symbol)
-        .forEach(({ i }) => {
-          const reference: LineKind.FootnoteReference = {
-            kind: 'footnote reference',
-            symbol,
-            referencedNote: footnote,
-          };
-
-          if (lines[i] == undefined) {
-            console.error('HELP: i: ' + i + ' and length: ' + lines.length);
-          }
-
-          // reference -> note
-          lines[i].item = {
-            ...lines[i].item,
-            ...reference,
-          };
-
-          // note -> reference
-          if (lines[footnoteLineIndex].item.kind === 'footnote') {
-            lines[footnoteLineIndex].item.referencedBy.push(reference);
-          } else {
-            console.error('ERROR: referenced line by footnote reference is not a footnote');
-          }
-        });
-    });
   });
 }
 
@@ -816,7 +812,7 @@ function markLine(line: MarkedLine, context: MarkingContext): [MarkedLine, Marki
   const page = pageNumberMatches?.groups?.page;
 
   const listMatches = lineInPlainText.match(
-    /^(?<listNumber>(?:^[ivxlc0-9]+|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b)[).—]+ *(?<afterListNumber>.*)$/iu,
+    /^(?<listNumber>(?:^[ivxlcIVXLC0-9]+|Zero|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve)\b)[).—]+ *(?<afterListNumber>.*)$/u,
   );
   const listNumberStr = listMatches?.groups?.listNumber;
   const listNumber = parseIntOrRomanOrSpelledNumber(listNumberStr);
@@ -836,7 +832,7 @@ function markLine(line: MarkedLine, context: MarkingContext): [MarkedLine, Marki
     }
   }
 
-  let output: MarkedLine | null = null;
+  let output: MarkedLine;
 
   if (firstItem != undefined && firstItem.height > 20)
     output = {
@@ -861,7 +857,13 @@ function markLine(line: MarkedLine, context: MarkingContext): [MarkedLine, Marki
       kind: 'page number',
       page: Number(page),
     };
-  else if (listNumber !== undefined && listNumberStr !== undefined && restOfLine !== undefined && listId !== undefined)
+  else if (
+    !line.continuationOfPreviousLine &&
+    listNumber !== undefined &&
+    listNumberStr !== undefined &&
+    restOfLine !== undefined &&
+    listId !== undefined
+  )
     output = {
       ...line,
       kind: 'list item',
@@ -876,75 +878,15 @@ function markLine(line: MarkedLine, context: MarkingContext): [MarkedLine, Marki
   return [output, context];
 }
 
-function fixSpacingInFlattenedString(toFix: string): string {
-  const rightSpacePunctuation = '*)”’;:';
-  const leftSpacePunctuation = '“‘(';
-  const bothSpacePunctuation = '—';
-  const noSpacePunctuation = `'-`;
-
-  const allPunctuation = bothSpacePunctuation + rightSpacePunctuation + leftSpacePunctuation + noSpacePunctuation;
-
-  // why did they do this
-  toFix = toFix.replaceAll(/’’/g, '”');
-
-  // I do not care for the dots personally. style choice
-  toFix = toFix.replaceAll(/A\. *A\./g, 'AA');
-
-  // periods are handled separately because of acronyms and ellipses
-  toFix = toFix.replaceAll(/ *([^A-Z .]) *(\.) *(\p{P}?) *(\p{P}?) */gu, '$1$2$3$4 ');
-
-  // commas are handled separately because of comma-delimited numbers
-  // not comma-separated numbers:
-  toFix = toFix.replaceAll(
-    / *(?:(?<first>[^0-9 ]) *, *(?<second>[^0-9 ]))|(?:(?<first>[0-9]) *, *(?<second>[^0-9% ]))|(?:(?<first>[^0-9 ]) *, *(?<second>[0-9])) */g,
-    '$<first>, $<second>',
-  );
-  // TODO: there is a bug for any two numbers that are listed with a comma between them, like a date.
-  //    See the output for the footnote on the last page of Bill's story.
-  //
-  //    Really this is a sign that the way I'm doing this sucks, we have x positions and can and should
-  //    use them to determine spacing choices instead of doing this hacky bullshit
-  //
-  // comma-separated numbers:
-  toFix = toFix.replaceAll(/ *(?<first>[0-9]) *, *(?<second>[0-9]) */g, '$<first>,$<second>');
-
-  for (const punct of allPunctuation) {
-    const leftPad = (leftSpacePunctuation + bothSpacePunctuation).includes(punct) ? ' ' : '';
-    const rightPad = (rightSpacePunctuation + bothSpacePunctuation).includes(punct) ? ' ' : '';
-
-    const escape = '(*)'.includes(punct) ? '\\' : '';
-
-    // const regex = new RegExp(` *\\${punct} *(\\p{P}*) *`, 'gu');
-    const regex = new RegExp(` *${escape}${punct} *(?<morePunct>\\p{P}*) *`, 'gu');
-
-    toFix = toFix.replaceAll(regex, leftPad + punct + '$<morePunct>' + rightPad);
-  }
-
-  const spaceThenPunctStartingLine = new RegExp(`^ ([${allPunctuation}])`, 'gum');
-  toFix = toFix.replaceAll(spaceThenPunctStartingLine, '$1');
-  const punctThenSpaceEndingLine = new RegExp(`([${allPunctuation},.]) $`, 'gum');
-  toFix = toFix.replaceAll(punctThenSpaceEndingLine, '$1');
-
-  // right single quotes are handled again because they might be an apostrophe in the middle of a word. STUPID
-  toFix = toFix.replaceAll(/(\w+)’ (\w+)/gu, (match, firstWord, secondWord) => {
-    // const firstWord = match.groups?.firstWord;
-    // const secondWord = match.groups?.secondWord;
-    if (typeof firstWord !== 'string' || typeof secondWord !== 'string') {
-      console.error('Dafuq');
-      return match;
-    }
-
-    const isPossessive = englishWords.check(firstWord.toLowerCase()) && secondWord.toLowerCase() == 's';
-    const isContraction =
-      englishWords.check(`${firstWord.toLowerCase()}'${secondWord.toLowerCase()}`) ||
-      englishWords.check(`${firstWord}'${secondWord.toLowerCase()}`);
-
-    if (isPossessive || isContraction) {
-      return `${firstWord}'${secondWord}`;
-    } else {
-      return `${firstWord}’ ${secondWord}`;
-    }
-  });
+function normalizeText(toFix: string): string {
+  toFix = toFix
+    // why did they do this
+    .replaceAll(/’’/g, '”')
+    // I do not care for the dots personally. style choice
+    .replaceAll(/A\. *A\./g, 'AA')
+    // spaces are nice
+    .replaceAll(/([\w\p{P}])—/gu, '$1 —')
+    .replaceAll(/—([\w\p{P}])/gu, '— $1');
 
   return toFix;
 }

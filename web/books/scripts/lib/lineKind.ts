@@ -34,5 +34,4 @@ export type ListItem = {
 export type Footnote = {
   kind: 'footnote';
   symbol: string;
-  note: string;
 };
