@@ -22,7 +22,7 @@ function isRoman(input: string): boolean {
   return regex.test(input);
 }
 
-export function parseIntOrRomanOrSpelledNumber(input?: string): number | undefined {
+export function parseListNumberOrLetter(input?: string): number | undefined {
   // normal int
   if (input == undefined) return undefined;
 
@@ -42,6 +42,9 @@ export function parseIntOrRomanOrSpelledNumber(input?: string): number | undefin
     ten: 10,
     eleven: 11,
     twelve: 12,
+    a: 0,
+    b: 1,
+    c: 2,
   };
 
   const parsedFromWord = wordMap[input];

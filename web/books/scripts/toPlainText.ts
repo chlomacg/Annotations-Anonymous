@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises';
+import { readdir, writeFile } from 'node:fs/promises';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import convert from 'convert';
 import type { TextContent, TextItem } from 'pdfjs-dist/types/src/display/api';
@@ -14,7 +14,11 @@ async function main() {
     case 'plain-text':
       return makeAllPlainText(dir);
     case 'html':
-      return makeAllHTML(dir);
+      if (process.argv.length < 4) {
+        console.error('ERROR: Please pass the name of the file to output to!');
+        process.exit(1);
+      }
+      return makeAllHTML(dir, process.argv[3]);
     case 'debug-plaintext-no-print':
       if (process.argv.length < 4) {
         console.error('ERROR: Please pass the name of the file to debug with!');
@@ -36,14 +40,41 @@ async function makeAllPlainText(directory: string) {
   console.log(plainText.join('\n\n'));
 }
 
-async function makeAllHTML(directory: string) {
-  const parsed: Parsed[] = await processDirectory(
+async function makeAllHTML(directory: string, outfile: string) {
+  const converted: string = await processDirectory(
     directory,
     async (path) => getTextFromPDF(path).then((text) => convertToHTML(text, path)),
     'Converted to html',
-  ).then((arr) => arr.flat(1));
+  ).then((arr) => arr.join('\n\n\n\n'));
 
-  console.dir(parsed, { depth: null });
+  const output = `<!doctype html>\n
+    <html lang="en">\n
+    <head>\n
+      <meta charset="UTF-8" />\n
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n
+      <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>\n
+      <style>
+        ol.list-alpha-parentheses li::marker {
+          content: "(" counter(list-item, lower-alpha) ")";
+        }
+      </style>
+    </head>\n
+    <body class="flex flex-col subpixel-antialiased font-serif bg-taupe-200">\n
+      <div class="flex h-[85vh] w-full">
+        <h1 class="my-auto md:text-6xl text-5xl font-black font-serif text-center">ALCOHOLICS ANONYMOUS</h1>
+      </div>
+      <div class="lg:max-w-2xl max-w-full md:px-10 px-4 mx-auto mb-12 lg:wrap-normal wrap-anywhere hyphens-auto">
+        ${converted}\n
+      </div>
+    </body>\n
+  </html>\n`;
+
+  console.log('Writing to: ', path.resolve(outfile));
+  try {
+    await writeFile(`${path.resolve(outfile)}`, output, 'utf8');
+  } catch (err) {
+    console.error('Error writing to file', err);
+  }
 }
 
 async function debug(file: string) {
@@ -65,7 +96,11 @@ async function processDirectory<T>(
 
   const dir = `${parentDir}/${directory}`;
   const files = await readdir(dir);
-  files.sort();
+  files.sort((a, b) => {
+    if (a.startsWith('_') && !b.startsWith('_')) return -1;
+    if (!a.startsWith('_') && b.startsWith('_')) return 1;
+    return a.localeCompare(b);
+  });
 
   const time1 = new Date();
   const out = await Promise.all(files.map((file) => process(`${dir}/${file}`)));
@@ -158,8 +193,8 @@ function makeMarkedLines(content: TextContent[], path: string): BlockOf<MarkedLi
 
   const lines = getGraphicalLines(textItems);
 
-  markBrokenWords(lines);
   markLines(lines);
+  markBrokenWords(lines);
   markIndents(lines);
   markFootnotes(lines);
 
@@ -167,16 +202,146 @@ function makeMarkedLines(content: TextContent[], path: string): BlockOf<MarkedLi
 }
 
 import {
-  plainStyle,
+  type BodyText,
   type Footnote,
   type ParagraphBody,
   type ParagraphBodyItem,
   type Parsed,
+  type Title,
 } from './lib/parsedText.ts';
-import { parseIntOrRomanOrSpelledNumber } from './lib/parseInt.ts';
+import { parseListNumberOrLetter } from './lib/parseInt.ts';
+import path from 'node:path';
 
-function convertToHTML(content: TextContent[], path: string): Parsed[] {
-  return []; // TODO: rewrite
+function convertToHTML(content: TextContent[], path: string): string {
+  const lines = makeMarkedLines(content, path);
+  const parsed = parseMarkedLines(lines);
+  const merged = mergeParsedLines(parsed);
+
+  function styled(element: BodyText): string {
+    if (element.style.italicized) return `<i class="font-italic">${element.text}</i>`;
+    else return element.text;
+  }
+
+  const htmlBody = merged
+    .map((p) => {
+      switch (p.kind) {
+        case 'chapter':
+          return `<h1 class="mt-6 mb-2 font-bold text-xl mx-auto">${p.text}</h1>`;
+        case 'title':
+          return `<h1 class="py-2 mb-8 mt-4 font-bold font-sans text-center text-2xl sticky top-0 z-10 bg-taupe-200 border-b-2 border-taupe-600">${p.text}</h1>`;
+        case 'footnote':
+          return `<p class="mb-2 indent-4 text-lg">${p.symbol}: ${p.body.map((ps) => {
+            switch (ps.kind) {
+              case 'text':
+                return ps.spaceBefore + styled(ps);
+              case 'footnote reference':
+                return ps.symbol;
+            }
+          })}</p>`;
+        case 'resentments table':
+          return `<table class="divide-y-2 divide-taupe-600 my-4">
+                    <thead>
+                      <th class="min-w-1/4 py-4"><i class="font-normal font-italic text-base">I’m resentful at:</i></th>
+                      <th class="max-w-2xs py-4"><i class="font-normal font-italic text-base">The Cause</i></th>
+                      <th class="py-4"><i class="font-normal font-italic text-base">Affects my:</i></th>
+                    </thead>
+                    <tbody class="table-auto divide-y-2 divide-taupe-600">
+                      <tr>
+                        <td rowspan="6">Mr. Brown</td>
+                        <td rowspan="2" class="max-w-2xs px-4 py-2">His attention to my wife.</td>
+                        <td class="py-2">Sex relations.</td>
+                      </tr>
+                      <tr>
+                        <td class="py-2">Self-esteem (fear)</td>
+                      </tr>
+                      <tr>
+                        <td rowspan="2" class="max-w-2xs px-4 py-2">Told my wife of my mistress.</td>
+                        <td class="py-2">Sex relations.</td>
+                      </tr>
+                      <tr>
+                        <td class="py-2">Self-esteem (fear)</td>
+                      </tr>
+                      <tr>
+                        <td rowspan="2" class="max-w-2xs px-4 py-2">Brown may get my job at the office.</td>
+                        <td class="py-2">Security.</td>
+                      </tr>
+                      <tr>
+                        <td class="py-2">Self-esteem (fear)</td>
+                      </tr>
+
+                      <tr>
+                        <td rowspan="2">Mrs. Jones</td>
+                        <td rowspan="2" class="max-w-2xs px-4 py-4">She's a nut — she snubbed me. She committed her husband for drinking. He's my friend. She's a gossip.</td>
+                        <td class="py-2">Personal relationship.</td>
+                      </tr>
+                      <tr>
+                        <td class="py-2">Self-esteem (fear)</td>
+                      </tr>
+
+
+                      <tr>
+                        <td rowspan="2">My employer</td>
+                        <td rowspan="2" class="max-w-2xs px-4 py-2">Unreasonable — Unjust — Overbearing — Threatens to fire me for drinking and padding my expense account.</td>
+                        <td class="py-2">Self-esteem (fear)</td>
+                      </tr>
+                      <tr>
+                        <td class="py-2">Security.</td>
+                      </tr>
+
+
+                      <tr>
+                        <td rowspan="2">My wife</td>
+                        <td class="max-w-2xs px-4 py-2">Misunderstands and nags. Likes Brown. </td>
+                        <td class="py-2">Pride — Personal sex relations</td>
+                      </tr>
+                      <tr>
+                        <td class="max-w-2xs px-4 py-2">Wants house put in her name.</td>
+                        <td class="py-2">Security (fear)</td>
+                      </tr>
+                    </tbody>
+                  </table>`;
+        case 'paragraph':
+          const bigLetter = p.bigLetter ?? '';
+          const body = p.body
+            .map((ps) => {
+              switch (ps.kind) {
+                case 'text':
+                  return ps.spaceBefore + styled(ps);
+                case 'footnote reference':
+                  return ps.symbol;
+                case 'linebreak':
+                  return ' <br class="hidden md:inline" />';
+              }
+            })
+            .join('');
+          const [, firstWord] = body.match(/^(\w+)/u) ?? ['', ''];
+          const firstTotal = bigLetter + firstWord;
+          const space =
+            !bigLetter || !firstWord || englishWords.check(firstTotal.toLowerCase()) || englishWords.check(firstTotal)
+              ? ''
+              : ' ';
+          return `<p class="my-${p.singleLine ? 0 : 4} lg:${p.indentLevel < 0 ? '-' : ''}indent-${Math.abs(p.indentLevel) * 3} ${p.indentLevel < 0 ? '-' : ''}indent-${Math.abs(p.indentLevel * 1.5)} lg:mx-${(p.baseline ?? 0) * 3} mx-${Math.round((p.baseline ?? 0) * 1.5)} text-lg">${bigLetter}${space}${body}</p>`;
+        case 'list':
+          return `<ol class="list-${p.listStyle} text-lg py-4 lg:pl-12 pl-8">${p.items
+            .map((listItem) => {
+              const body = listItem
+                .map((bodyItem) => {
+                  switch (bodyItem.kind) {
+                    case 'text':
+                      return bodyItem.spaceBefore + styled(bodyItem);
+                    case 'footnote reference':
+                      return bodyItem.symbol;
+                  }
+                })
+                .join('');
+              return `<li class="pl-4 pb-4">${body}</li>`;
+            })
+            .join('\n\n')}</ol>`;
+      }
+    })
+    .join('\n\n');
+
+  return `<div>${htmlBody}</div>`;
 }
 
 function convertToPlainText(content: TextContent[], path: string): string {
@@ -198,12 +363,12 @@ function convertToPlainText(content: TextContent[], path: string): string {
               .map((ps) => {
                 switch (ps.kind) {
                   case 'text':
-                    return ps.text;
+                    return ps.spaceBefore + ps.text;
                   case 'footnote reference':
                     return ps.symbol;
                 }
               })
-              .join(' ') +
+              .join('') +
             '\n\n\n\n'
           );
         case 'paragraph':
@@ -212,13 +377,15 @@ function convertToPlainText(content: TextContent[], path: string): string {
             .map((ps) => {
               switch (ps.kind) {
                 case 'text':
-                  return ps.text;
+                  return ps.spaceBefore + ps.text;
                 case 'footnote reference':
                   return ps.symbol;
+                case 'linebreak':
+                  return '\n';
               }
             })
-            .join(' ');
-          const [, firstWord] = body.match(/^([\w\p{P}]+) /u) ?? [, ''];
+            .join('');
+          const [, firstWord] = body.match(/^(\w+) /u) ?? [, ''];
           const firstTotal = bigLetter + firstWord;
           const space =
             !bigLetter || !firstWord || englishWords.check(firstTotal.toLowerCase()) || englishWords.check(firstTotal)
@@ -235,12 +402,12 @@ function convertToPlainText(content: TextContent[], path: string): string {
                   .map((ps) => {
                     switch (ps.kind) {
                       case 'text':
-                        return ps.text;
+                        return ps.spaceBefore + ps.text;
                       case 'footnote reference':
                         return ps.symbol;
                     }
                   })
-                  .join(' '),
+                  .join(''),
             )
             .join(' ');
       }
@@ -248,9 +415,51 @@ function convertToPlainText(content: TextContent[], path: string): string {
     .join('\n');
 }
 
+function mergeParsedLines(parsed: Parsed[]): Parsed[] {
+  const merged: Parsed[] = [];
+  for (let i = 0; i < parsed.length; i++) {
+    const current = parsed[i];
+    const lastPushed = merged.at(-1);
+    if (
+      current.kind == 'paragraph' &&
+      lastPushed?.kind == 'paragraph' &&
+      current.singleLine &&
+      ((lastPushed.singleLine && lastPushed.indentLevel > current.indentLevel) ||
+        lastPushed.baseline === current.indentLevel)
+    ) {
+      if (lastPushed.singleLine) {
+        lastPushed.body.push({ kind: 'linebreak' }, ...current.body);
+        lastPushed.baseline = current.indentLevel;
+        lastPushed.indentLevel = lastPushed.indentLevel - lastPushed.baseline;
+        lastPushed.singleLine = false;
+      } else if (lastPushed.baseline === current.indentLevel) {
+        lastPushed.body.push({ kind: 'linebreak' }, ...current.body);
+      }
+    } else {
+      merged.push(current);
+    }
+  }
+
+  return merged;
+}
+
 // lets not print the title of the book randomly
 // 'To wives' in the title has an asterisk, so print that one but not the subsequent page headers
-const printedTitles: string[] = ['ALCOHOLICS ANONYMOUS', 'TO WIVES'];
+const printedTitles: string[] = [
+  'ALCOHOLICS ANONYMOUS',
+  'TO HANDLE SOBRIETY',
+  'ALCOHOLIC ANONYMOUS NUMBER THREE',
+  'THE HOUSEWIFE WHO DRANK AT HOME',
+];
+
+const titlesAlwaysPrinted: string[] = [
+  'PART I',
+  'PIONEERS OF A.A.',
+  'PART II',
+  'THEY STOPPED IN TIME',
+  'PART III',
+  'THEY LOST NEARLY ALL',
+];
 
 function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
   const fontNames = Map.groupBy(
@@ -258,19 +467,57 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
     ({ fontName }) => fontName,
   );
 
-  let italicFontName: string | undefined;
+  const italicFontNames: string[] = new Array(0);
+  const italicPhrases = [
+    'Chapter',
+    'Dr. Bob and the nine men and women who here tell',
+    'The fifteen stories in this group tell of alcoholism at its',
+    'Among',
+    'This is the Foreword as it appeared in the first',
+    'recovery',
+    'Figures given in this foreword describe the',
+    'Alcoholics Anonymous',
+    'American',
+    'Willingness, honesty and open',
+    'need',
+    'How Forty-Two Alcoholics',
+    'los Doce Pasos',
+  ];
+
   fontNames.forEach(([{ str, fontName }]) => {
-    if (str.startsWith('Chapter')) italicFontName = fontName;
+    if (italicPhrases.some((x) => str.startsWith(x))) italicFontNames.push(fontName);
   });
 
   type Context = {
     lineLastSeen?: BlockOf<MarkedLine>;
     blockCurrentlyIn?: Exclude<Parsed, Footnote>; // Usually gonna be a paragraph, could be a list
     footnoteCurrentlyIn?: Footnote; // footnotes often interrupt paragraphs
+    titleToPush?: { title: Title; page: number };
   };
   const context: Context = {};
 
   const parsed: Parsed[] = [];
+
+  function pushContext(currentPage: number) {
+    if (context.titleToPush?.page === 0) {
+      parsed.push(context.titleToPush.title);
+      context.titleToPush = undefined;
+    }
+    if (context.blockCurrentlyIn !== undefined) {
+      parsed.push(context.blockCurrentlyIn);
+      context.blockCurrentlyIn = undefined;
+    }
+    if (context.titleToPush !== undefined && context.titleToPush.page !== 0) {
+      parsed.push(context.titleToPush.title);
+      context.titleToPush = undefined;
+    }
+    if (context.footnoteCurrentlyIn && context.footnoteCurrentlyIn.pageIndex !== currentPage) {
+      parsed.push(context.footnoteCurrentlyIn);
+      context.footnoteCurrentlyIn = undefined;
+    }
+  }
+
+  let skippingTable = false;
 
   lines.forEach((line) => {
     // we dont like these guys very much.
@@ -279,121 +526,213 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
     while (line.item.contents.at(0)?.str.length == 0) line.item.contents = line.item.contents.slice(1);
     if (line.item.contents.length == 0) return;
 
-    const currentKind = context.blockCurrentlyIn?.kind;
+    let currBlock = context.blockCurrentlyIn;
+
+    const enteringList = line.item.kind === 'list item' && currBlock?.kind !== 'list';
+    const leavingList =
+      currBlock?.kind === 'list' &&
+      line.item.kind !== 'list item' &&
+      line.item.kind !== 'normal' &&
+      (line.item.kind !== 'indented' || line.item.indentLevel <= 2);
+    const enteringBlockQuote = currBlock?.kind !== 'list' && line.item.kind === 'indented' && line.item.indentLevel > 2;
+    const isFootnoteSymbol =
+      ['indented', 'normal'].includes(line.item.kind) && line.item.contents.map((i) => i.str).join('') === '*';
 
     const pushLastBlock: boolean =
-      ['big letter', 'indented', 'chapter'].includes(line.item.kind) ||
-      (line.item.kind === 'list item' && currentKind !== 'list') ||
-      (currentKind === 'list' && line.item.kind !== 'list item' && line.item.kind !== 'normal') ||
-      (line.item.kind === 'normal' &&
-        currentKind !== 'paragraph' &&
-        currentKind !== 'list' &&
-        !context.footnoteCurrentlyIn);
+      line.item.kind !== 'title' &&
+      !isFootnoteSymbol &&
+      (['big letter', 'chapter'].includes(line.item.kind) ||
+        enteringList ||
+        leavingList ||
+        enteringBlockQuote ||
+        (line.item.kind === 'normal' &&
+          currBlock?.kind !== 'paragraph' &&
+          currBlock?.kind !== 'list' &&
+          !context.footnoteCurrentlyIn));
 
-    if (pushLastBlock && context.blockCurrentlyIn !== undefined) {
-      parsed.push(context.blockCurrentlyIn);
-      if (context.footnoteCurrentlyIn && context.footnoteCurrentlyIn.pageIndex !== line.pageIndex) {
-        parsed.push(context.footnoteCurrentlyIn);
-        context.footnoteCurrentlyIn = undefined;
-      }
+    if (pushLastBlock) pushContext(line.pageIndex);
+    currBlock = context.blockCurrentlyIn;
+
+    const enteringResentmentsTable = context.lineLastSeen?.item.contents
+      .map((i) => i.str)
+      .join(' ')
+      .startsWith('We were usually as definite as this example');
+    const leavingResentmentsTable = line.item.contents
+      .map((i) => i.str)
+      .join(' ')
+      .startsWith('We went back through our lives');
+
+    if (enteringResentmentsTable) {
+      skippingTable = true;
+      pushContext(context.lineLastSeen!.pageIndex);
+    }
+
+    if (skippingTable) {
+      if (leavingResentmentsTable) {
+        skippingTable = false;
+        parsed.push({ kind: 'resentments table' });
+      } else return;
     }
 
     switch (line.item.kind) {
       case 'big letter':
         const afterBig = line.item.contents.slice(1);
-        const body = flattenLine(afterBig, line.pageIndex, italicFontName!);
+        const body = flattenLine(afterBig, line.pageIndex, italicFontNames);
         // TODO: add indent level detection
         context.blockCurrentlyIn = {
           kind: 'paragraph',
           bigLetter: line.item.contents[0].str,
           indentLevel: 1,
+          singleLine: false,
           body,
         };
 
         break;
 
       case 'list item':
-        if (context.blockCurrentlyIn?.kind !== 'list') context.blockCurrentlyIn = { kind: 'list', items: [] };
+        function detectListStyle(marker: string) {
+          if (marker.charAt(0) == '(') marker = marker.slice(1);
+          switch (marker.charAt(0)) {
+            case 'a':
+              return 'alpha-parentheses';
+            case 'i':
+              return '[lower-roman]';
+            case 'I':
+              return '[upper-roman]';
+            case '1':
+            default:
+              return '[decimal]';
+          }
+        }
+
+        if (context.blockCurrentlyIn?.kind !== 'list')
+          context.blockCurrentlyIn = { kind: 'list', items: [], listStyle: detectListStyle(line.item.number[0]) };
 
         if (line.item.continuationOfPreviousLine && context.blockCurrentlyIn.items.length > 0) {
           const lastItem = context.blockCurrentlyIn.items.pop()!;
           const lastInLastItem = lastItem.pop()!;
 
-          lastItem.push(...joinLines(lastInLastItem, line, italicFontName!));
+          lastItem.push(...joinLines(lastInLastItem, line, italicFontNames));
           context.blockCurrentlyIn.items.push(lastItem);
         } else if (line.item.continuationOfPreviousLine && context.blockCurrentlyIn.items.length == 0) {
           console.error(
             `WARNING: Context empty in file ${line.file}, page ${line.pageIndex} but the following line is continuing a previous line:`,
           );
           console.error(
-            `${flattenLine(line.item.contents, line.pageIndex, italicFontName!).map((v) => (v.kind == 'text' ? v.text : v.symbol))}`,
+            `${flattenLine(line.item.contents, line.pageIndex, italicFontNames!).map((v) => (v.kind == 'text' ? v.text : v.kind == 'footnote reference' ? v.symbol : ''))}`,
           );
           console.error('Skipping this line during parsing.');
         } else {
-          context.blockCurrentlyIn.items.push([
-            {
-              kind: 'text',
-              text: line.item.restOfLine,
-              style: { italicized: false },
-            },
-          ]);
+          const [numberStr] = line.item.number;
+
+          function skip() {
+            while (line.item.contents[0].str.length == 0) line.item.contents = line.item.contents.slice(1);
+            line.item.contents[0].str = line.item.contents[0].str.substring(1);
+            while (line.item.contents[0].str.length == 0) line.item.contents = line.item.contents.slice(1);
+          }
+
+          for (let i = 0; i < numberStr.length; i++)
+            if (line.item.contents[0].str.charAt(0) == numberStr.charAt(i)) {
+              skip();
+            } else {
+              console.error('???????/: c=', line.item.contents[0].str.charAt(0), "| n='" + numberStr.charAt(i) + "'");
+            }
+
+          context.blockCurrentlyIn.items.push(flattenLine(line.item.contents, line.pageIndex, italicFontNames));
         }
         break;
 
-      // If a footnote interrupts a paragraph, it cuts it off curently, TODO: fix
       case 'footnote':
         context.footnoteCurrentlyIn = {
           kind: 'footnote',
           symbol: line.item.symbol,
           pageIndex: line.pageIndex,
-          body: flattenLine(line.item.contents.slice(1), line.pageIndex, italicFontName!),
+          body: flattenLine(line.item.contents.slice(1), line.pageIndex, italicFontNames),
         };
         break;
       case 'chapter':
         parsed.push({ kind: 'chapter', text: `Chapter ${line.item.chapter}` });
         break;
       case 'title':
-        const currentTitle = line.item.contents.map(({ str }) => str).reduce((p, n) => `${p} ${n}`);
+        const currentTitle = line.item.title;
         const alreadyPrinted = printedTitles.includes(currentTitle);
-        if (!alreadyPrinted) {
-          parsed.push({
-            kind: 'title',
-            text: normalizeText(currentTitle),
-          });
+        if (!alreadyPrinted || titlesAlwaysPrinted.includes(currentTitle)) {
+          if (context.titleToPush === undefined)
+            context.titleToPush = {
+              title: {
+                kind: 'title',
+                text: normalizeText(currentTitle),
+              },
+              page: line.pageIndex,
+            };
+          else context.titleToPush.title.text += ' ' + normalizeText(currentTitle);
+
           printedTitles.push(currentTitle);
         }
         break;
 
       case 'indented':
-        context.blockCurrentlyIn = {
-          kind: 'paragraph',
-          indentLevel: 1,
-          body: [...flattenLine(line.item.contents, line.pageIndex, italicFontName!)],
-        };
+        if (currBlock?.kind == 'list') {
+          const lastItemofLastItem = currBlock.items.at(-1)!.pop()!;
+
+          currBlock.items.at(-1)!.push(...joinLines(lastItemofLastItem, line, italicFontNames));
+        } else if (isFootnoteSymbol && currBlock?.kind === 'paragraph') {
+          currBlock.body.push({ kind: 'footnote reference', symbol: '*', pageOfReferencedFootnote: line.pageIndex });
+        } else if (line.item.continuationOfPreviousLine && currBlock?.kind == 'paragraph') {
+          const lastItem = currBlock.body.pop()!;
+
+          const [first, ...rest] = joinLines(lastItem, line, italicFontNames, true);
+
+          currBlock.body.push(first);
+          pushContext(line.pageIndex);
+
+          context.blockCurrentlyIn = {
+            kind: 'paragraph',
+            indentLevel: line.item.indentLevel,
+            singleLine: true,
+            body: rest,
+          };
+        } else {
+          pushContext(line.pageIndex);
+          context.blockCurrentlyIn = {
+            kind: 'paragraph',
+            indentLevel: line.item.indentLevel,
+            singleLine: true,
+            body: [...flattenLine(line.item.contents, line.pageIndex, italicFontNames)],
+          };
+        }
         break;
       case 'normal':
-        const currBlock = context.blockCurrentlyIn;
         const currFootnote = context.footnoteCurrentlyIn;
 
-        if (currFootnote !== undefined && currFootnote.pageIndex == line.pageIndex) {
+        if (currFootnote?.pageIndex == line.pageIndex) {
           const lastItem = currFootnote.body.pop()!;
 
-          currFootnote.body.push(...joinLines(lastItem, line, italicFontName!));
+          currFootnote.body.push(...joinLines(lastItem, line, italicFontNames));
         } else if (currBlock?.kind == 'paragraph') {
           if (currBlock.body.at(-1)?.kind == 'text') {
             const lastItem = currBlock.body.pop()!;
 
-            currBlock.body.push(...joinLines(lastItem, line, italicFontName!));
+            currBlock.singleLine = false;
+            currBlock.body.push(...joinLines(lastItem, line, italicFontNames));
           } else {
-            currBlock.body.push(...flattenLine(line.item.contents, line.pageIndex, italicFontName!));
+            currBlock.singleLine = false;
+            currBlock.body.push(...flattenLine(line.item.contents, line.pageIndex, italicFontNames));
           }
         } else if (currBlock?.kind == 'list' && currBlock.items.at(-1)?.at(-1)?.kind == 'text') {
           const lastItemofLastItem = currBlock.items.at(-1)!.pop()!;
 
-          currBlock.items.at(-1)!.push(...joinLines(lastItemofLastItem, line, italicFontName!));
+          currBlock.items.at(-1)!.push(...joinLines(lastItemofLastItem, line, italicFontNames));
+        } else if (currBlock === undefined) {
+          context.blockCurrentlyIn = {
+            kind: 'paragraph',
+            indentLevel: 0,
+            singleLine: true,
+            body: [...flattenLine(line.item.contents, line.pageIndex, italicFontNames)],
+          };
         } else {
           console.error(
-            `ERROR during parsing: blockKind = ${context.blockCurrentlyIn?.kind}, line: ${JSON.stringify(line, null, 2)}`,
+            `ERROR during parsing: blockKind = ${currBlock?.kind} | line: ${line.item.contents.map(({ str }) => str).join(' ')}`,
           );
         }
         break;
@@ -401,8 +740,8 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
     context.lineLastSeen = line;
   });
 
-  if (context.blockCurrentlyIn) parsed.push(context.blockCurrentlyIn);
-  if (context.footnoteCurrentlyIn) parsed.push(context.footnoteCurrentlyIn);
+  // + 1 so that the footnote gets pushed for sure
+  pushContext(context.lineLastSeen!.pageIndex + 1);
 
   return parsed;
 }
@@ -410,9 +749,10 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
 function joinLines(
   lastItem: ParagraphBodyItem,
   nextLine: BlockOf<MarkedLine>,
-  italicFontName: string,
+  italicFontNames: string[],
+  preserveLineBreak = false,
 ): ParagraphBodyItem[] {
-  const nextFlattened = flattenLine(nextLine.item.contents, nextLine.pageIndex, italicFontName!);
+  const nextFlattened = flattenLine(nextLine.item.contents, nextLine.pageIndex, italicFontNames!);
   const firstOfNextItalicized = nextFlattened[0].kind == 'text' && nextFlattened[0].style.italicized;
 
   if (lastItem.kind !== 'text' || lastItem.style.italicized !== firstOfNextItalicized)
@@ -420,8 +760,6 @@ function joinLines(
 
   let { text } = lastItem;
 
-  const indented = nextLine.item.kind == 'indented';
-  if (indented) console.error('WARNING: Joining a line with a line that begins a new paragraph?');
   const continuation = nextLine.item.continuationOfPreviousLine;
 
   const firstElement = nextFlattened.at(0);
@@ -435,6 +773,7 @@ function joinLines(
     case true:
       // remove hyphen, if present
       text = text.replace(/-$/, '');
+      text = text.replace(/ *$/, '');
       break;
     case 'keep hyphen':
       text += '-';
@@ -445,13 +784,32 @@ function joinLines(
   }
 
   const space = firstWord && afterFirstWord ? ' ' : '';
-  text += firstWord + space + afterFirstWord;
+  const style = lastItem.style;
+  const { spaceBefore } = lastItem;
 
-  const style = { italicized: firstOfNextItalicized };
-  return [{ kind: 'text', text, style }, ...afterFirstElement];
+  if (preserveLineBreak) {
+    if (continuation) {
+      text += firstWord;
+      return [
+        { kind: 'text', text, style, spaceBefore },
+        { kind: 'text', text: afterFirstWord, style, spaceBefore: ' ' },
+        ...afterFirstElement,
+      ];
+    } else {
+      const secondText = firstWord + space + afterFirstWord;
+      return [
+        { kind: 'text', text, style, spaceBefore },
+        { kind: 'text', text: secondText, style, spaceBefore: ' ' },
+        ...afterFirstElement,
+      ];
+    }
+  } else {
+    text += firstWord + space + afterFirstWord;
+    return [{ kind: 'text', text, style, spaceBefore }, ...afterFirstElement];
+  }
 }
 
-function flattenLine(line: TextItem[], pageNumber: number, italicFontName: string): ParagraphBody {
+function flattenLine(line: TextItem[], pageNumber: number, italicFontNames: string[]): ParagraphBody {
   let last: TextItem | undefined = undefined;
   const flattened: ParagraphBodyItem[] = [];
   for (let i = 0; i < line.length; i++) {
@@ -460,13 +818,18 @@ function flattenLine(line: TextItem[], pageNumber: number, italicFontName: strin
 
     const spaceBeforeCurrent = lastPosition ? x - lastPosition.x - lastPosition.width : 0;
 
-    const spaceToAdd = spaceBeforeCurrent > 2 ? ' ' : '';
+    const spaceToAdd = spaceBeforeCurrent > 2 || line[i].str.startsWith('—') ? ' ' : '';
 
     if (isFootnoteSymbol(line[i].str)) {
       flattened.push({ kind: 'footnote reference', symbol: line[i].str, pageOfReferencedFootnote: pageNumber });
     } else {
+      const currentIsItalic = italicFontNames.includes(line[i].fontName) && line[i].str !== 'W';
+
       const lastFlattened = flattened.at(-1);
-      const addLastStr = lastFlattened !== undefined && lastFlattened.kind === 'text';
+      const addLastStr =
+        lastFlattened !== undefined &&
+        lastFlattened.kind === 'text' &&
+        lastFlattened?.style.italicized === currentIsItalic;
 
       if (addLastStr) flattened.pop();
       const merged = addLastStr ? lastFlattened.text + spaceToAdd + line[i].str : line[i].str;
@@ -474,12 +837,13 @@ function flattenLine(line: TextItem[], pageNumber: number, italicFontName: strin
       // emdashes are often in the middle of TextItems, so we do this hacky nonsense
       const text = normalizeText(merged);
 
-      const style = line[i].fontName == italicFontName ? { italicized: true } : plainStyle;
+      const style = { italicized: currentIsItalic };
 
       flattened.push({
         kind: 'text',
         text,
         style,
+        spaceBefore: addLastStr ? lastFlattened.spaceBefore : spaceToAdd,
       });
     }
 
@@ -537,92 +901,110 @@ function getGraphicalLines(document: BlockOf<TextItem>[]): BlockOf<MarkedLine>[]
   return lines;
 }
 
-const titles = [
-  'Alcoholics Anonymous',
-  'Title Page',
-  'Copyright Information',
-  'Preface',
-  'Foreword to First Edition',
-  'Foreword to Second Edition',
-  'Foreword to Third Edition',
-  'Foreword to Fourth Edition',
-  'The Doctors Opinion',
-  'Bill’s Story',
-  'There is a Solution',
-  'More About Alcoholism',
-  'We Agnostics',
-  'How It Works',
-  'Into Action',
-  'Working With Others',
-  'To Wives',
-  'The Family Afterward',
-  'To Employers',
-  'A Vision For You',
-  'Personal Stories',
-  'How Forty-Two Alcoholics Recovered From Their Malady',
+// a generic helper function to convert an array of tuples to a record
+function makeRecord<const T extends readonly (readonly [PropertyKey, unknown])[]>(tuples: T) {
+  return Object.fromEntries(tuples) as {
+    [K in T[number][0]]: Extract<T[number], readonly [K, unknown]>[1];
+  };
+}
 
-  'PART I',
-  'PIONEERS OF AA',
-  'DOCTOR BOB’S NIGHTMARE',
-  'ALCOHOLIC ANONYMOUS',
-  'NUMBER THREE',
-  'ALCOHOLIC ANONYMOUS NUMBER THREE',
-  'GRATITUDE IN ACTION',
-  'WOMEN SUFFER TOO',
-  'OUR SOUTHERN FRIEND',
-  'THE VICIOUS CYCLE',
-  'THE MAN WHO MASTERED FEAR',
-  'HE SOLD HIMSELF SHORT',
-  'THE KEYS OF THE KINGDOM',
+const titles = makeRecord(
+  [
+    'Alcoholics Anonymous',
+    'The Doctor’s Opinion',
+    'Title Page',
+    'Copyright Information',
+    'Preface',
+    'Foreword to First Edition',
+    'Foreword to Second Edition',
+    'Foreword to Third Edition',
+    'Foreword to Fourth Edition',
+    'The Doctors Opinion',
+    'Bill’s Story',
+    'There is a Solution',
+    'More About Alcoholism',
+    'We Agnostics',
+    'How It Works',
+    'Into Action',
+    'Working With Others',
+    'To Wives *',
+    'To Wives',
+    'The Family Afterward',
+    'To Employers',
+    'A Vision For You',
+    'Personal Stories',
+    'How Forty-Two Alcoholics Recovered From Their Malady',
 
-  'PART II',
-  'THEY STOPPED IN TIME',
-  'THE MISSING LINK',
-  'FEAR OF FEAR',
-  'THE HOUSEWIFE WHO DRANK',
-  'AT HOME',
-  'THE HOUSEWIFE WHO DRANK AT HOME',
-  'MY CHANCE TO LIVE',
-  'STUDENT OF LIFE',
-  'CROSSING THE RIVER OF DENIAL',
-  'IT MIGHT HAVE BEEN WORSE',
-  'TIGHTROPE',
-  'FLOODED WITH FEELING',
-  'WINNER TAKES ALL',
-  'THE PERPETUAL QUEST',
-  'ACCEPTANCE WAS THE ANSWER',
-  'WINDOW OF OPPORTUNITY',
+    'PART I',
+    'PIONEERS OF A.A.',
+    'DOCTOR BOB’S NIGHTMARE',
+    'ALCOHOLIC ANONYMOUS',
+    'NUMBER THREE',
+    'ALCOHOLIC ANONYMOUS NUMBER THREE',
+    'GRATITUDE IN ACTION',
+    'WOMEN SUFFER TOO',
+    'OUR SOUTHERN FRIEND',
+    'THE VICIOUS CYCLE',
+    'JIM’S STORY',
+    'THE MAN WHO MASTERED FEAR',
+    'HE SOLD HIMSELF SHORT',
+    'THE KEYS OF THE KINGDOM',
 
-  'PART III',
-  'THEY LOST NEARLY ALL',
-  'AND ME',
-  'HE LIVED ONLY TO DRINK',
-  'SAFE HAVEN',
-  'LISTENING TO THE WIND',
-  'TWICE GIFTED',
-  'BUILDING A NEW LIFE',
-  'ON THE MOVE',
-  'A VISION OF RECOVERY',
-  'GUTTER BRAVADO',
-  'EMPTY ON THE INSIDE',
-  'GROUNDED',
-  'ANOTHER CHANCE',
-  'A LATE START',
-  'LATE START',
-  'FREEDOM FROM BONDAGE',
-  'AA TAUGHT HIM TO HANDLE',
-  'SOBRIETY',
-  'TO HANDLE SOBRIETY',
+    'PART II',
+    'THEY STOPPED IN TIME',
+    'THE MISSING LINK',
+    'FEAR OF FEAR',
+    'THE HOUSEWIFE WHO DRANK',
+    'AT HOME',
+    'THE HOUSEWIFE WHO DRANK AT HOME',
+    'PHYSICIAN, HEAL THYSELF!',
+    'MY CHANCE TO LIVE',
+    'STUDENT OF LIFE',
+    'CROSSING THE RIVER OF DENIAL',
+    'BECAUSE I’M AN ALCOHOLIC',
+    'IT MIGHT HAVE BEEN WORSE',
+    'TIGHTROPE',
+    'FLOODED WITH FEELING',
+    'WINNER TAKES ALL',
+    'ME AN ALCOHOLIC?',
+    'THE PERPETUAL QUEST',
+    'A DRUNK, LIKE YOU',
+    'ACCEPTANCE WAS THE ANSWER',
+    'WINDOW OF OPPORTUNITY',
 
-  'The A.A. Tradition',
-  'Spiritual Experience',
-  'The Medical View On A.A.',
-  'The Lasker Award',
-  'The Religious View on A.A.',
-  'How to Get in Touch With A.A.',
-  'Twelve Concepts (Short Form)',
-].map((x) => x.toUpperCase());
+    'PART III',
+    'THEY LOST NEARLY ALL',
+    'MY BOTTLE, MY RESENTMENTS,',
+    'AND ME',
+    'HE LIVED ONLY TO DRINK',
+    'SAFE HAVEN',
+    'LISTENING TO THE WIND',
+    'TWICE GIFTED',
+    'BUILDING A NEW LIFE',
+    'ON THE MOVE',
+    'A VISION OF RECOVERY',
+    'GUTTER BRAVADO',
+    'EMPTY ON THE INSIDE',
+    'GROUNDED',
+    'ANOTHER CHANCE',
+    'A LATE START',
+    'LATE START',
+    'FREEDOM FROM BONDAGE',
+    'A.A. TAUGHT HIM TO HANDLE',
+    'SOBRIETY',
+    'TO HANDLE SOBRIETY',
 
+    'The A.A. Tradition',
+    'The Twelve Traditions',
+    ['( THE LONG FORM )', 'Twelve Traditions, Long Form'],
+    'Spiritual Experience',
+    'The Medical View On A.A.',
+    'The Lasker Award',
+    'The Religious View on A.A.',
+    'How to Get in Touch With A.A.',
+    'The Twelve Concepts (Short Form)',
+  ].map((x) => (typeof x == 'string' ? [x.toUpperCase(), x.toUpperCase()] : (x as [string, string]))),
+);
 // Marks lines that continue a word from a previous line
 function markBrokenWords(lines: BlockOf<MarkedLine>[]) {
   // We manually manage the "last" element instead of using lines.at(i - 1) so we can skip the
@@ -645,20 +1027,21 @@ function markBrokenWords(lines: BlockOf<MarkedLine>[]) {
     const lastItemOfLast = last.item.contents[last.item.contents.length - 1];
 
     // Find the candidates for a word broken across lines
-    const firstWordInCurrentItem: string | undefined = firstItemOfCurrent.str.match(/^([\w\-’]+)/u)?.at(1);
+    const firstWordInCurrentItem: string | undefined = firstItemOfCurrent.str.match(/^(-?[\w’]+)/u)?.at(1);
     const firstWordInCurrentItemIsWord: boolean =
       firstWordInCurrentItem != undefined && englishWords.check(firstWordInCurrentItem);
 
-    const lastWordInLastItem: string | undefined = lastItemOfLast.str.match(/\b([\w’]+)[^\w’]*$/)?.at(1);
+    const lastWordInLastItem: string | undefined = lastItemOfLast.str.match(/\b([\w’]+) ?-?$/)?.at(1);
     const lastWordInLastItemIsWord: boolean = lastWordInLastItem != undefined && englishWords.check(lastWordInLastItem);
     const hyphenBetween: boolean = last != undefined && /-$/.test(lastItemOfLast.str);
+
     // Remove hyphen if it exists, we will replace it later
     if (hyphenBetween)
       last.item.contents[last.item.contents.length - 1].str = last.item.contents[
         last.item.contents.length - 1
       ].str.slice(0, -1);
 
-    const wordsNotInDictionary = ['Plattsburg'];
+    const wordsNotInDictionary = ['Plattsburg', 'baffling'];
 
     const wordSpanningAcrossLines: string | undefined =
       lastWordInLastItem && lastWordInLastItem + firstWordInCurrentItem;
@@ -766,7 +1149,7 @@ function markIndents(lines: BlockOf<MarkedLine>[]) {
           lines[lineIndexOverall].item = {
             ...lines[lineIndexOverall].item,
             kind: 'indented',
-            indentLevel: (xValue - baselineXValue) / 12,
+            indentLevel: Math.round((xValue - baselineXValue) / 6),
           };
       }),
     );
@@ -802,7 +1185,7 @@ function markLine(line: MarkedLine, context: MarkingContext): [MarkedLine, Marki
     .reduce((p, n) => `${p} ${n}`)
     .trim();
 
-  const titleMatches = lineInPlainText.match(/^[0-9]* *(?<title>(?:[A-Za-z’]+ +)*[A-Za-z’]+) *[0-9]*$/);
+  const titleMatches = lineInPlainText.match(/^[0-9]* *(?<title>(?:[(A-Za-z’.,?!)]+ +)*[(A-Za-z’.,?!)]+) *\*?[0-9]*$/);
   const title = titleMatches?.groups?.title;
 
   const chapterMatches = lineInPlainText.match(/^Chapter +(?<chapter>[0-9]*)$/);
@@ -812,10 +1195,13 @@ function markLine(line: MarkedLine, context: MarkingContext): [MarkedLine, Marki
   const page = pageNumberMatches?.groups?.page;
 
   const listMatches = lineInPlainText.match(
-    /^(?<listNumber>(?:^[ivxlcIVXLC0-9]+|Zero|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve)\b)[).—]+ *(?<afterListNumber>.*)$/u,
+    /^(?<listNumberAndPunctuation>\((?<listNumber>[a-c])|(?<listNumber>^[ivxlcIVXLC]+||[0-9][0-9]?|Zero|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve))\b ?(?<post1>[).—]) ?(?<post2>[).—]?) *(?<afterListNumber>.*)$/u,
   );
+  const post1 = listMatches?.groups?.post1 ?? '';
+  const post2 = listMatches?.groups?.post2 ?? '';
+  const wholeListNumber = (listMatches?.groups?.listNumberAndPunctuation ?? '') + post1 + post2;
   const listNumberStr = listMatches?.groups?.listNumber;
-  const listNumber = parseIntOrRomanOrSpelledNumber(listNumberStr);
+  const listNumber = parseListNumberOrLetter(listNumberStr);
   const restOfLine = listMatches?.groups?.afterListNumber;
 
   const lastListNumber = context.mostRecentListNumbers.at(-1);
@@ -839,11 +1225,11 @@ function markLine(line: MarkedLine, context: MarkingContext): [MarkedLine, Marki
       ...line,
       kind: 'big letter',
     };
-  else if (title && titles.includes(title.toUpperCase()))
+  else if (title && titles[title.toUpperCase()])
     output = {
       ...line,
       kind: 'title',
-      title,
+      title: titles[title.toUpperCase()],
     };
   else if (chapter)
     output = {
@@ -859,6 +1245,7 @@ function markLine(line: MarkedLine, context: MarkingContext): [MarkedLine, Marki
     };
   else if (
     !line.continuationOfPreviousLine &&
+    wholeListNumber !== undefined &&
     listNumber !== undefined &&
     listNumberStr !== undefined &&
     restOfLine !== undefined &&
@@ -867,7 +1254,7 @@ function markLine(line: MarkedLine, context: MarkingContext): [MarkedLine, Marki
     output = {
       ...line,
       kind: 'list item',
-      number: [listNumberStr, listNumber],
+      number: [wholeListNumber, listNumber],
       listId,
       restOfLine,
     };
@@ -884,9 +1271,11 @@ function normalizeText(toFix: string): string {
     .replaceAll(/’’/g, '”')
     // I do not care for the dots personally. style choice
     .replaceAll(/A\. *A\./g, 'AA')
+    .replaceAll(/AA ([A-Z])/g, 'AA. $1')
     // spaces are nice
     .replaceAll(/([\w\p{P}])—/gu, '$1 —')
-    .replaceAll(/—([\w\p{P}])/gu, '— $1');
+    .replaceAll(/—([\w\p{P}])/gu, '— $1')
+    .replaceAll(/ \. \. \./g, '...');
 
   return toFix;
 }

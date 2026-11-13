@@ -1,4 +1,4 @@
-export type Parsed = Chapter | Title | Footnote | Paragraph | List;
+export type Parsed = Chapter | Title | Footnote | Paragraph | List | ResentmentsTable;
 
 export type Chapter = {
   kind: 'chapter';
@@ -18,24 +18,37 @@ export type Paragraph = {
   kind: 'paragraph';
   bigLetter?: string;
   indentLevel: number;
+  baseline?: number;
+  singleLine: boolean;
   body: ParagraphBody;
 };
 export type List = {
   kind: 'list';
-  items: ParagraphBodyItem[][];
+  listStyle: '[decimal]' | 'alpha-parentheses' | '[upper-roman]' | '[lower-roman]';
+  items: ParagraphBody[];
+};
+export type ResentmentsTable = {
+  kind: 'resentments table';
 };
 
 export type ParagraphBody = ParagraphBodyItem[];
-export type ParagraphBodyItem = BodyText | FootnoteReference;
+export type ParagraphBodyItem = BodyText | FootnoteReference | LineBreak;
+export type LineBreak = { kind: 'linebreak' };
 export type BodyText = {
   kind: 'text';
   text: string;
   style: Styles;
+  spaceBefore: ' ' | '';
 };
 export type FootnoteReference = {
   kind: 'footnote reference';
   symbol: string;
   pageOfReferencedFootnote: number;
+};
+
+export type IndentedLine = {
+  indent: number;
+  body: ParagraphBody;
 };
 
 export type Styles = {
