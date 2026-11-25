@@ -5,6 +5,7 @@ export type Normal = {
 // First line of paragraph
 export type Indented = {
   kind: 'indented';
+  centered: boolean;
   indentLevel: number;
 };
 // First body line of chapter begins with a large letter

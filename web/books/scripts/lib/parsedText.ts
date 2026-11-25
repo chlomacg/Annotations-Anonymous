@@ -1,4 +1,12 @@
-export type Parsed = Chapter | Title | Footnote | Paragraph | List | ResentmentsTable;
+export type Parsed =
+  | Chapter
+  | Title
+  | Footnote
+  | Paragraph
+  | CenteredText
+  | List
+  | ResentmentsTable
+  | TombstoneDoggerel;
 
 export type Chapter = {
   kind: 'chapter';
@@ -22,13 +30,20 @@ export type Paragraph = {
   singleLine: boolean;
   body: ParagraphBody;
 };
+export type CenteredText = {
+  kind: 'centered';
+  lines: CenteredParagraph[];
+};
 export type List = {
   kind: 'list';
-  listStyle: '[decimal]' | 'alpha-parentheses' | '[upper-roman]' | '[lower-roman]';
+  listStyle: 'decimal' | 'alpha-parentheses' | '[upper-roman]' | '[lower-roman]';
   items: ParagraphBody[];
 };
 export type ResentmentsTable = {
   kind: 'resentments table';
+};
+export type TombstoneDoggerel = {
+  kind: 'tombstone doggerel';
 };
 
 export type ParagraphBody = ParagraphBodyItem[];
@@ -46,8 +61,9 @@ export type FootnoteReference = {
   pageOfReferencedFootnote: number;
 };
 
-export type IndentedLine = {
+export type CenteredParagraph = {
   indent: number;
+  baseline?: number;
   body: ParagraphBody;
 };
 

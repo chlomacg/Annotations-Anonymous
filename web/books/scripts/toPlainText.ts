@@ -58,14 +58,157 @@ async function makeAllHTML(directory: string, outfile: string) {
           content: "(" counter(list-item, lower-alpha) ")";
         }
       </style>
+
     </head>\n
     <body class="flex flex-col subpixel-antialiased font-serif bg-taupe-200">\n
-      <div class="flex h-[85vh] w-full">
-        <h1 class="my-auto md:text-6xl text-5xl font-black font-serif text-center">ALCOHOLICS ANONYMOUS</h1>
+      <header id="navbar" class="fixed top-0 left-0 right-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 h-12 flex flex-row-reverse justify-between bg-none">
+          <button id="menu" class="w-fit lg:hidden p-2 rounded-lg text-taupe-500 bg-taupe-200">
+            Menu
+          </button>
+        </div>
+      </header>
+
+      <!-- Backdrop Overlay -->
+      <div id="backdrop" class="fixed inset-0 z-30 hidden bg-taupe-900/50 transition-opacity"></div>
+
+      <!-- Slide-in Sidebar -->
+      <aside id="sidebar" class="overflow-y-auto fixed inset-y-0 right-0 z-70 w-64 translate-x-full transform bg-taupe-900 text-white transition-transform duration-300 ease-in-out">
+        
+        <!-- Sidebar Header -->
+        <div class="flex items-center justify-between border-b border-taupe-800 px-6 py-4">
+          <span class="text-lg font-bold tracking-wide">Menu</span>
+          <button id="close-sidebar" class="rounded-lg p-1 text-taupe-400 hover:bg-taupe-800 hover:text-white">
+            <!-- Close (X) Icon -->
+            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+    
+        <!-- Navigation Links -->
+        <nav class="space-y-4 px-4 py-6">
+
+          <button id="lucky" class="block rounded-lg bg-taupe-800 pl-4 pr-2 py-2.5 text-sm font-medium text-white">I'm feeling lucky</button>
+          <div class="block">
+            <span>Table of contents</span>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">Preface</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">1st Foreword</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">2nd Foreword</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">3rd Foreword</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">4th Foreword</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">The Doctor's Opinion</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">Bill's Story</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">There is a Solution</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">More About Alcoholism</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">We Agnostics</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">How It Works</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">Into Action</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">Working With Others</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">To Wives</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">The Family Afterward</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">To Employers</a>
+              <a href="#" class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">A Vision For You</a>
+              
+              
+              <details class="group/stories rounded-lg bg-taupe-800">
+                <summary class="flex px-4 py-2.5 cursor-pointer list-none items-center justify-between font-medium text-taupe-300">
+                  <span class="block rounded-lg text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">The Stories:</span>
+                  <!-- Rotating chevron icon -->
+                  <svg class="h-5 w-5 transition-transform duration-200 group-open/stories:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <div class="block ml-2">
+
+                  <details class="group/pioneers rounded-lg bg-taupe-800 py-2.5 px-4">
+                    <summary class="flex cursor-pointer list-none items-center justify-between font-medium text-taupe-300">
+                      <span class="block rounded-lg text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">Pioneers of AA:</span>
+                      <!-- Rotating chevron icon -->
+                      <svg class="h-5 w-5 transition-transform duration-200 group-open/pioneers:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </summary>
+
+                    <div class="block ml-2">
+                      <div class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">
+                        <span>Doctor Bob's Nightmare</span>
+                      </div>
+                      <div class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">
+                        <span>Alcoholics Anonymous Number Three</span>
+                      </div>
+                      <div class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">
+                        <span>Gratitude in Action</span>
+                      </div>
+                      <div class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">
+                        <span>Women Suffer Too</span>
+                      </div>
+                      <div class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">
+                        <span>The Vicious Cycle</span>
+                      </div>
+                      <div class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">
+                        <span>Jim's Story</span>
+                      </div>
+                      <div class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">
+                        <span>The Man Who Mastered Fear</span>
+                      </div>
+                      <div class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">
+                        <span>He Sold Himself Short</span>
+                      </div>
+                      <div class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">
+                        <span>The Keys of the Kingdom</span>
+                      </div>
+                    </div>
+                  </details>
+
+
+                  <div class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">
+                    <span>They Stopped In Time</span>
+                  </div>
+                  <div class="block rounded-lg px-4 py-2.5 text-sm font-medium text-taupe-300 hover:bg-taupe-800 hover:text-white">
+                    <span>They Lost Nearly All</span>
+                  </div>
+                </div>
+              </details>
+
+              
+              
+              <div class="block">
+              </div>
+
+
+          </div>
+        </nav>
+      </aside>
+
+      <div class="flex h-[85vh] w-full bg-taupe-200 z-60">
+        <h1 class="m-auto md:text-6xl text-5xl font-black font-serif text-center">ALCOHOLICS ANONYMOUS</h1>
       </div>
-      <div class="lg:max-w-2xl max-w-full md:px-10 px-4 mx-auto mb-12 lg:wrap-normal wrap-anywhere hyphens-auto">
+      <div class="md:max-w-2xl max-w-lg md:px-10 px-4 mx-auto mb-12 lg:wrap-normal wrap-anywhere hyphens-auto">
         ${converted}\n
       </div>
+
+      <script defer>
+        document.addEventListener("DOMContentLoaded", () => {
+          const navbar = document.getElementById("navbar");
+          navbar.classList.add("scrolled");
+
+          const sidebar = document.getElementById("sidebar");
+          const backdrop = document.getElementById("backdrop");
+
+          const mobileMenuButton = document.getElementById("menu");
+          mobileMenuButton.addEventListener('click', toggleSidebar);
+
+          const closeSidebarButton = document.getElementById("close-sidebar");
+          closeSidebarButton.addEventListener('click', toggleSidebar);
+
+          function toggleSidebar() {
+            sidebar.classList.toggle('translate-x-full');
+            backdrop.classList.toggle('hidden');
+            navbar.classList.toggle('hidden');
+          }
+       });
+      </script>
     </body>\n
   </html>\n`;
 
@@ -171,12 +314,18 @@ function positionOf(item: TextItem): Position {
 }
 
 // Fully marks all line and item info
-function makeMarkedLines(content: TextContent[], path: string): BlockOf<MarkedLine>[] {
+function makeMarkedLines(content: TextContent[], file: string): [BlockOf<MarkedLine>[], string[]] {
   const textItems: BlockOf<TextItem>[] = content.flatMap((c, pageIndex) =>
     c.items
       .filter((item) => 'str' in item)
       // .map((item) => ({ ...item, str: item.str.replaceAll('—', ' — ') }))
-      .map((item, lineIndex) => ({ item, position: positionOf(item), file: path, pageIndex, lineIndex }))
+      .map((item, lineIndex) => ({
+        item,
+        position: positionOf(item),
+        file,
+        pageIndex,
+        lineIndex,
+      }))
       .sort((a, b) => {
         // there are many lines that are just barely different y values but on the same line, so
         // we use this heuristic.
@@ -193,18 +342,46 @@ function makeMarkedLines(content: TextContent[], path: string): BlockOf<MarkedLi
 
   const lines = getGraphicalLines(textItems);
 
+  const fontNames = Map.groupBy(
+    lines.flatMap(({ item }) => item.contents.map(({ str, fontName }) => ({ str, fontName }))),
+    ({ fontName }) => fontName,
+  );
+
+  const italicFontNames: string[] = new Array(0);
+  const italicPhrases = [
+    'Chapter',
+    'Dr. Bob and the nine men and women who here tell',
+    'The fifteen stories in this group tell of alcoholism at its',
+    'Among',
+    'This is the Foreword as it appeared in the first',
+    'recovery',
+    'Figures given in this foreword describe the',
+    'Alcoholics Anonymous',
+    'American',
+    'Willingness, honesty and open',
+    'need',
+    'How Forty-Two Alcoholics',
+    'los Doce Pasos',
+  ];
+
+  fontNames.forEach(([{ str, fontName }]) => {
+    if (italicPhrases.some((x) => str.startsWith(x))) {
+      italicFontNames.push(fontName);
+    }
+  });
+
   markLines(lines);
   markBrokenWords(lines);
-  markIndents(lines);
+  markIndents(lines, italicFontNames);
   markFootnotes(lines);
 
-  return lines;
+  return [lines, italicFontNames];
 }
 
 import {
   type BodyText,
   type Footnote,
-  type ParagraphBody,
+  type FootnoteReference,
   type ParagraphBodyItem,
   type Parsed,
   type Title,
@@ -213,8 +390,8 @@ import { parseListNumberOrLetter } from './lib/parseInt.ts';
 import path from 'node:path';
 
 function convertToHTML(content: TextContent[], path: string): string {
-  const lines = makeMarkedLines(content, path);
-  const parsed = parseMarkedLines(lines);
+  const [lines, italicFontNames] = makeMarkedLines(content, path);
+  const parsed = parseMarkedLines(lines, italicFontNames);
   const merged = mergeParsedLines(parsed);
 
   function styled(element: BodyText): string {
@@ -229,15 +406,48 @@ function convertToHTML(content: TextContent[], path: string): string {
           return `<h1 class="mt-6 mb-2 font-bold text-xl mx-auto">${p.text}</h1>`;
         case 'title':
           return `<h1 class="py-2 mb-8 mt-4 font-bold font-sans text-center text-2xl sticky top-0 z-10 bg-taupe-200 border-b-2 border-taupe-600">${p.text}</h1>`;
+        case 'centered':
+          return `<div class="flex flex-col gap-1">
+                    ${p.lines
+                      .map(
+                        (ps) =>
+                          `<p class="mx-auto max-w-md md:indent-6 indent-3">${ps.body
+                            .map((pss) => {
+                              switch (pss.kind) {
+                                case 'text':
+                                  return pss.spaceBefore + styled(pss);
+                                case 'footnote reference':
+                                  return pss.symbol;
+                              }
+                            })
+                            .join('')}</p>`,
+                      )
+                      .join('</br>')}
+                  </div>`;
         case 'footnote':
-          return `<p class="mb-2 indent-4 text-lg">${p.symbol}: ${p.body.map((ps) => {
-            switch (ps.kind) {
-              case 'text':
-                return ps.spaceBefore + styled(ps);
-              case 'footnote reference':
-                return ps.symbol;
-            }
-          })}</p>`;
+          return `<p class="mb-2 indent-4 text-lg">${p.symbol}: ${p.body
+            .map((ps) => {
+              switch (ps.kind) {
+                case 'text':
+                  return ps.spaceBefore + styled(ps);
+                case 'footnote reference':
+                  return ps.symbol;
+              }
+            })
+            .join('')}</p>`;
+        case 'tombstone doggerel':
+          return `<div class="w-fit mx-auto mb-4">
+                    <p class="-indent-1.5 text-lg">
+                      “Here lies a Hampshire Grenadier</br>
+                      Who caught his death</br>
+                      Drinking cold small beer.</br>
+                      A good soldier is ne’er forgot</br>
+                      Whether he dieth by musket</br>
+                    </p>
+                    <p class="text-center text-lg">
+                      Or by pot.”
+                    </p>
+                  </div>`;
         case 'resentments table':
           return `<table class="divide-y-2 divide-taupe-600 my-4">
                     <thead>
@@ -320,7 +530,7 @@ function convertToHTML(content: TextContent[], path: string): string {
             !bigLetter || !firstWord || englishWords.check(firstTotal.toLowerCase()) || englishWords.check(firstTotal)
               ? ''
               : ' ';
-          return `<p class="my-${p.singleLine ? 0 : 4} lg:${p.indentLevel < 0 ? '-' : ''}indent-${Math.abs(p.indentLevel) * 3} ${p.indentLevel < 0 ? '-' : ''}indent-${Math.abs(p.indentLevel * 1.5)} lg:mx-${(p.baseline ?? 0) * 3} mx-${Math.round((p.baseline ?? 0) * 1.5)} text-lg">${bigLetter}${space}${body}</p>`;
+          return `<p class="my-${p.singleLine ? 0 : 4} md:${p.indentLevel < 0 ? '-' : ''}indent-${Math.abs(p.indentLevel) * 3} ${p.indentLevel < 0 ? '-' : ''}indent-${Math.abs(p.indentLevel * 1.5)} lg:mx-${(p.baseline ?? 0) * 3} mx-${Math.round((p.baseline ?? 0) * 1.5)} text-lg">${bigLetter}${space}${body}</p>`;
         case 'list':
           return `<ol class="list-${p.listStyle} text-lg py-4 lg:pl-12 pl-8">${p.items
             .map((listItem) => {
@@ -345,9 +555,9 @@ function convertToHTML(content: TextContent[], path: string): string {
 }
 
 function convertToPlainText(content: TextContent[], path: string): string {
-  const lines = makeMarkedLines(content, path);
+  const [lines, italicFontNames] = makeMarkedLines(content, path);
 
-  const parsed = parseMarkedLines(lines);
+  const parsed = parseMarkedLines(lines, italicFontNames);
 
   return parsed
     .map((p) => {
@@ -461,33 +671,7 @@ const titlesAlwaysPrinted: string[] = [
   'THEY LOST NEARLY ALL',
 ];
 
-function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
-  const fontNames = Map.groupBy(
-    lines.flatMap(({ item }) => item.contents.map(({ str, fontName }) => ({ str, fontName }))),
-    ({ fontName }) => fontName,
-  );
-
-  const italicFontNames: string[] = new Array(0);
-  const italicPhrases = [
-    'Chapter',
-    'Dr. Bob and the nine men and women who here tell',
-    'The fifteen stories in this group tell of alcoholism at its',
-    'Among',
-    'This is the Foreword as it appeared in the first',
-    'recovery',
-    'Figures given in this foreword describe the',
-    'Alcoholics Anonymous',
-    'American',
-    'Willingness, honesty and open',
-    'need',
-    'How Forty-Two Alcoholics',
-    'los Doce Pasos',
-  ];
-
-  fontNames.forEach(([{ str, fontName }]) => {
-    if (italicPhrases.some((x) => str.startsWith(x))) italicFontNames.push(fontName);
-  });
-
+function parseMarkedLines(lines: BlockOf<MarkedLine>[], italicFontNames: string[]): Parsed[] {
   type Context = {
     lineLastSeen?: BlockOf<MarkedLine>;
     blockCurrentlyIn?: Exclude<Parsed, Footnote>; // Usually gonna be a paragraph, could be a list
@@ -499,7 +683,7 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
   const parsed: Parsed[] = [];
 
   function pushContext(currentPage: number) {
-    if (context.titleToPush?.page === 0) {
+    if (context.titleToPush !== undefined) {
       parsed.push(context.titleToPush.title);
       context.titleToPush = undefined;
     }
@@ -507,17 +691,13 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
       parsed.push(context.blockCurrentlyIn);
       context.blockCurrentlyIn = undefined;
     }
-    if (context.titleToPush !== undefined && context.titleToPush.page !== 0) {
-      parsed.push(context.titleToPush.title);
-      context.titleToPush = undefined;
-    }
     if (context.footnoteCurrentlyIn && context.footnoteCurrentlyIn.pageIndex !== currentPage) {
       parsed.push(context.footnoteCurrentlyIn);
       context.footnoteCurrentlyIn = undefined;
     }
   }
 
-  let skippingTable = false;
+  let skipping = false;
 
   lines.forEach((line) => {
     // we dont like these guys very much.
@@ -533,8 +713,19 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
       currBlock?.kind === 'list' &&
       line.item.kind !== 'list item' &&
       line.item.kind !== 'normal' &&
-      (line.item.kind !== 'indented' || line.item.indentLevel <= 2);
-    const enteringBlockQuote = currBlock?.kind !== 'list' && line.item.kind === 'indented' && line.item.indentLevel > 2;
+      (line.item.kind !== 'indented' || line.item.centered || line.item.indentLevel <= 2);
+    const enteringBlockQuote =
+      currBlock?.kind !== 'list' &&
+      line.item.kind === 'indented' &&
+      ((line.item.centered && currBlock?.kind !== 'centered') || (!line.item.centered && line.item.indentLevel > 2));
+    const enteringCenteredText = currBlock?.kind !== 'centered' && line.item.kind === 'indented' && line.item.centered;
+    const leavingCenteredText =
+      currBlock?.kind === 'centered' && (line.item.kind !== 'indented' || !line.item.centered);
+    const leavingParagraph =
+      currBlock?.kind === 'paragraph' &&
+      line.item.kind === 'indented' &&
+      currBlock.baseline !== undefined &&
+      line.item.indentLevel !== currBlock.baseline;
     const isFootnoteSymbol =
       ['indented', 'normal'].includes(line.item.kind) && line.item.contents.map((i) => i.str).join('') === '*';
 
@@ -544,6 +735,9 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
       (['big letter', 'chapter'].includes(line.item.kind) ||
         enteringList ||
         leavingList ||
+        leavingParagraph ||
+        enteringCenteredText ||
+        leavingCenteredText ||
         enteringBlockQuote ||
         (line.item.kind === 'normal' &&
           currBlock?.kind !== 'paragraph' &&
@@ -552,6 +746,15 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
 
     if (pushLastBlock) pushContext(line.pageIndex);
     currBlock = context.blockCurrentlyIn;
+
+    const enteringTombstoneDoggerel = context.lineLastSeen?.item.contents
+      .map((i) => i.str)
+      .join(' ')
+      .includes('doggerel on an old tombstone');
+    const leavingTombstoneDoggerel = line.item.contents
+      .map((i) => i.str)
+      .join(' ')
+      .startsWith('Ominous warning');
 
     const enteringResentmentsTable = context.lineLastSeen?.item.contents
       .map((i) => i.str)
@@ -562,15 +765,18 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
       .join(' ')
       .startsWith('We went back through our lives');
 
-    if (enteringResentmentsTable) {
-      skippingTable = true;
+    if (enteringResentmentsTable || enteringTombstoneDoggerel) {
+      skipping = true;
       pushContext(context.lineLastSeen!.pageIndex);
     }
 
-    if (skippingTable) {
+    if (skipping) {
       if (leavingResentmentsTable) {
-        skippingTable = false;
+        skipping = false;
         parsed.push({ kind: 'resentments table' });
+      } else if (leavingTombstoneDoggerel) {
+        skipping = false;
+        parsed.push({ kind: 'tombstone doggerel' });
       } else return;
     }
 
@@ -582,7 +788,7 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
         context.blockCurrentlyIn = {
           kind: 'paragraph',
           bigLetter: line.item.contents[0].str,
-          indentLevel: 1,
+          indentLevel: 2,
           singleLine: false,
           body,
         };
@@ -601,7 +807,7 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
               return '[upper-roman]';
             case '1':
             default:
-              return '[decimal]';
+              return 'decimal';
           }
         }
 
@@ -657,7 +863,8 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
         const currentTitle = line.item.title;
         const alreadyPrinted = printedTitles.includes(currentTitle);
         if (!alreadyPrinted || titlesAlwaysPrinted.includes(currentTitle)) {
-          if (context.titleToPush === undefined)
+          if (context.titleToPush === undefined) {
+            pushContext(context.lineLastSeen?.pageIndex ?? line.pageIndex);
             context.titleToPush = {
               title: {
                 kind: 'title',
@@ -665,17 +872,39 @@ function parseMarkedLines(lines: BlockOf<MarkedLine>[]): Parsed[] {
               },
               page: line.pageIndex,
             };
-          else context.titleToPush.title.text += ' ' + normalizeText(currentTitle);
+          } else context.titleToPush.title.text += ' ' + normalizeText(currentTitle);
 
           printedTitles.push(currentTitle);
         }
         break;
 
       case 'indented':
-        if (currBlock?.kind == 'list') {
+        if (line.item.centered && currBlock?.kind === 'centered') {
+          const lastItem = currBlock.lines.at(-1);
+          const isSecondLine = lastItem && lastItem.baseline === undefined;
+          if (isSecondLine || lastItem?.baseline === line.item.indentLevel) {
+            const lastItemOfLast = lastItem!.body.pop()!;
+            lastItem!.body.push(...joinLines(lastItemOfLast, line, italicFontNames));
+            if (isSecondLine) lastItem!.baseline = line.item.indentLevel;
+          } else {
+            const body = flattenLine(line.item.contents, line.pageIndex, italicFontNames);
+            currBlock.lines.push({ body, indent: line.item.indentLevel });
+          }
+        } else if (line.item.centered) {
+          context.blockCurrentlyIn = {
+            kind: 'centered',
+            lines: [
+              { body: flattenLine(line.item.contents, line.pageIndex, italicFontNames), indent: line.item.indentLevel },
+            ],
+          };
+        } else if (currBlock?.kind == 'list') {
           const lastItemofLastItem = currBlock.items.at(-1)!.pop()!;
 
           currBlock.items.at(-1)!.push(...joinLines(lastItemofLastItem, line, italicFontNames));
+        } else if (context.footnoteCurrentlyIn?.pageIndex == line.pageIndex) {
+          const lastItem = context.footnoteCurrentlyIn.body.pop()!;
+
+          context.footnoteCurrentlyIn.body.push(...joinLines(lastItem, line, italicFontNames));
         } else if (isFootnoteSymbol && currBlock?.kind === 'paragraph') {
           currBlock.body.push({ kind: 'footnote reference', symbol: '*', pageOfReferencedFootnote: line.pageIndex });
         } else if (line.item.continuationOfPreviousLine && currBlock?.kind == 'paragraph') {
@@ -809,9 +1038,13 @@ function joinLines(
   }
 }
 
-function flattenLine(line: TextItem[], pageNumber: number, italicFontNames: string[]): ParagraphBody {
+function flattenLine(
+  line: TextItem[],
+  pageNumber: number,
+  italicFontNames: string[],
+): (BodyText | FootnoteReference)[] {
   let last: TextItem | undefined = undefined;
-  const flattened: ParagraphBodyItem[] = [];
+  const flattened: (BodyText | FootnoteReference)[] = [];
   for (let i = 0; i < line.length; i++) {
     const { x } = positionOf(line[i]);
     const lastPosition = last && positionOf(last);
@@ -975,6 +1208,7 @@ const titles = makeRecord(
     'PART III',
     'THEY LOST NEARLY ALL',
     'MY BOTTLE, MY RESENTMENTS,',
+    'MY BOTTLE, MY RESENTMENTS, AND ME',
     'AND ME',
     'HE LIVED ONLY TO DRINK',
     'SAFE HAVEN',
@@ -994,6 +1228,7 @@ const titles = makeRecord(
     'SOBRIETY',
     'TO HANDLE SOBRIETY',
 
+    'Appendices',
     'The A.A. Tradition',
     'The Twelve Traditions',
     ['( THE LONG FORM )', 'Twelve Traditions, Long Form'],
@@ -1119,11 +1354,12 @@ function markFootnotes(lines: BlockOf<MarkedLine>[]) {
 }
 
 // Marks indented lines in place
-function markIndents(lines: BlockOf<MarkedLine>[]) {
+function markIndents(lines: BlockOf<MarkedLine>[], italicFontNames: string[]) {
   // We keep the original indices so we can modify the array in place
   const linesMarkedWithIndices = lines.map((line, lineIndexOverall) => ({ lineIndexOverall, ...line }));
 
   const pages = Map.groupBy(linesMarkedWithIndices, (line) => line.pageIndex);
+
   pages.forEach((pageLines) => {
     const linesMinusSkipped = pageLines.filter(({ item }) => item.kind == 'normal');
     if (linesMinusSkipped.length == 0) return;
@@ -1142,17 +1378,45 @@ function markIndents(lines: BlockOf<MarkedLine>[]) {
     const baselineXValue = linesSortedByAscendingXValue[0][0];
 
     // skip the first entry with slice(1) because that's (likely) the baseline
-    linesSortedByAscendingXValue.slice(1).forEach(([xValue, linesOnPage]) =>
-      linesOnPage.forEach(({ lineIndexOverall }) => {
-        // There is often a "ghost indent" the line after a big letter, and big letters are never a singlet paragraph
-        if (lines.at(lineIndexOverall - 1)?.item.kind != 'big letter')
-          lines[lineIndexOverall].item = {
-            ...lines[lineIndexOverall].item,
-            kind: 'indented',
-            indentLevel: Math.round((xValue - baselineXValue) / 6),
-          };
-      }),
-    );
+    linesSortedByAscendingXValue
+      .map(([x, linesOnPage], i) => ({ x, isBaseline: i == 0, linesOnPage }))
+      .forEach(({ x, linesOnPage, isBaseline }) =>
+        linesOnPage.forEach(({ lineIndexOverall }) => {
+          function isCentered(indexOverall: number): boolean {
+            // rough heuristic, many false positives
+            function italicizedOrPunctuationOrNumbers(line: BlockOf<MarkedLine>): boolean {
+              return (
+                (line.item.kind === 'normal' || line.item.kind === 'indented') &&
+                line.item.contents
+                  .map(({ str, fontName }) => {
+                    const isPunctuationOrNumbers = /^[0-9., “”’]+$/.test(str);
+                    const isItalic = italicFontNames.includes(fontName);
+
+                    return isPunctuationOrNumbers || isItalic;
+                  })
+                  .every((x) => x)
+              );
+            }
+
+            const thisLineAndBefore = lines.slice(0, indexOverall + 1);
+            const lastTitleIndex = thisLineAndBefore.findLastIndex((i) => i.item.kind === 'title', thisLineAndBefore);
+            const betweenTitleAndThisLine = thisLineAndBefore.slice(lastTitleIndex + 1);
+
+            return betweenTitleAndThisLine.every(italicizedOrPunctuationOrNumbers);
+          }
+
+          const textIsCentered = isCentered(lineIndexOverall);
+
+          if (textIsCentered || !isBaseline)
+            if (lines.at(lineIndexOverall - 1)?.item.kind !== 'big letter')
+              lines[lineIndexOverall].item = {
+                ...lines[lineIndexOverall].item,
+                kind: 'indented',
+                centered: textIsCentered,
+                indentLevel: Math.round((x - baselineXValue) / 6),
+              };
+        }),
+      );
   });
 }
 
